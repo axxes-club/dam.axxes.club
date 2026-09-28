@@ -43,6 +43,7 @@ import {
   Trash2,
   Upload,
   UploadCloud,
+  UserCog,
   Video,
   X,
 } from "lucide-react";
@@ -112,7 +113,7 @@ function openMenuAt(el: HTMLElement) {
   el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: rect.left, clientY: rect.bottom }));
 }
 
-export function FoldersApp({ viewer }: { viewer: Viewer }) {
+export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUrl: string | null }) {
   const router = useRouter();
 
   // ── Workspace ──
@@ -521,10 +522,16 @@ export function FoldersApp({ viewer }: { viewer: Viewer }) {
   });
 
   const signOut = async () => {
+    // With Handshake, signing out ends the shared session for every AXXES app
+    if (handshakeUrl) {
+      window.location.assign(`${handshakeUrl}/sign-out?redirect=${encodeURIComponent(`${window.location.origin}/`)}`);
+      return;
+    }
     await authClient.signOut();
     router.push("/sign-in");
     router.refresh();
   };
+
 
   // ── No workspace ──
   if (!tenant) {
@@ -633,7 +640,7 @@ export function FoldersApp({ viewer }: { viewer: Viewer }) {
             )}
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <AccountMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} role={tenant.role} onSignOut={signOut} switchTenant={switchTenant} />
+            <AccountMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} role={tenant.role} onSignOut={signOut} switchTenant={switchTenant} accountUrl={handshakeUrl} />
           </div>
         </header>
 
@@ -1026,7 +1033,7 @@ function NavItem({
   );
 }
 
-function AccountMenu({ viewer, tenantId, tenantName, role, onSignOut, switchTenant }: { viewer: Viewer; tenantId: string; tenantName: string; role: string; onSignOut: () => void; switchTenant: (id: string) => void }) {
+function AccountMenu({ viewer, tenantId, tenantName, role, onSignOut, switchTenant, accountUrl }: { viewer: Viewer; tenantId: string; tenantName: string; role: string; onSignOut: () => void; switchTenant: (id: string) => void; accountUrl: string | null }) {
   const initials = (viewer.name || viewer.email).split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   return (
     <DropdownMenu>
@@ -1064,6 +1071,11 @@ function AccountMenu({ viewer, tenantId, tenantName, role, onSignOut, switchTena
         <DropdownMenuItem onClick={() => window.open(PORTAL_URL, "_blank", "noopener,noreferrer")}>
           <ExternalLink /> Open in members portal
         </DropdownMenuItem>
+        {accountUrl && (
+          <DropdownMenuItem onClick={() => window.open(accountUrl, "_blank", "noopener,noreferrer")}>
+            <UserCog /> Manage your AXXES account
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={onSignOut}>
           <LogOut /> Sign out
         </DropdownMenuItem>
