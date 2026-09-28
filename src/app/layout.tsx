@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/toast";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "AXXES DAM",
-  description: "Digital Asset Management for AXXES.club",
+  title: { default: "Folders by AXXES", template: "%s · Folders" },
+  description: "Store, organize and share your team's files.",
 };
 
 export default function RootLayout({
@@ -18,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("font-sans", inter.variable)}>
       <body className="antialiased">
-        {children}
+        <Toaster>{children}</Toaster>
       </body>
     </html>
   );

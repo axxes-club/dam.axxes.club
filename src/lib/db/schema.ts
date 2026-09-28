@@ -69,6 +69,7 @@ export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
+  settings: jsonb("settings").$type<{ features?: Record<string, boolean> } & Record<string, unknown>>().default({}),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 })
 
@@ -102,3 +103,15 @@ export const assets = pgTable("assets", {
 })
 
 export type AssetRow = typeof assets.$inferSelect
+
+// Handoff Sessions (for QR code camera uploads)
+export const uploadSessions = pgTable("upload_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  token: text("token").notNull().unique(),
+  tenantId: uuid("tenant_id").notNull(),
+  folder: text("folder"),
+  createdById: text("created_by_id").notNull(),
+  photos: jsonb("photos").$type<string[]>().default([]),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})

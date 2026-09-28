@@ -1,11 +1,11 @@
-import { sql, type SQL } from "drizzle-orm";
+import { asc, desc, sql, type SQL } from "drizzle-orm";
 import { assets, type AssetRow } from "./db/schema";
-import type { Asset, AssetType } from "./types";
+import { UNFILED, type Asset, type AssetSort, type AssetType } from "./types";
 
 export const ASSET_TYPES: AssetType[] = ["image", "video", "document", "other"];
 
-// Folder filter value for assets with no folder
-export const UNFILED = "__unfiled__";
+export { UNFILED };
+export const PAGE_SIZE = 60;
 
 export function assetTypeOf(mimeType: string | null, category: string | null): AssetType {
   const mime = mimeType ?? "";
@@ -33,6 +33,23 @@ export function assetTypeCondition(type: AssetType): SQL {
   }
 }
 
+export function assetOrderBy(sort: AssetSort | undefined) {
+  switch (sort) {
+    case "oldest":
+      return [asc(assets.createdAt), asc(assets.id)];
+    case "name-asc":
+      return [asc(sql`lower(${assets.name})`), asc(assets.id)];
+    case "name-desc":
+      return [desc(sql`lower(${assets.name})`), desc(assets.id)];
+    case "largest":
+      return [sql`${assets.fileSize} desc nulls last`, desc(assets.id)];
+    case "smallest":
+      return [sql`${assets.fileSize} asc nulls last`, asc(assets.id)];
+    default:
+      return [desc(assets.createdAt), desc(assets.id)];
+  }
+}
+
 export function toAsset(row: AssetRow): Asset {
   return {
     id: row.id,
@@ -50,6 +67,7 @@ export function toAsset(row: AssetRow): Asset {
     source: row.source,
     originalFilename: row.originalFilename,
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
     tags: Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === "string") : [],
     folder: row.folder,
   };

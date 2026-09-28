@@ -1,24 +1,47 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { and, asc, count, eq, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { assets } from "@/lib/db/schema";
-import { getViewer, tenantAccess } from "@/lib/access";
-import type { FolderSummary } from "@/lib/types";
+import { guard, jsonError, removeOrphanedUploads } from "@/lib/api";
+import { normalizeFolder } from "@/lib/assets";
+import { queryOverview } from "@/lib/queries";
 
 export async function GET(req: NextRequest) {
-  const viewer = await getViewer(req.headers);
-  if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = await guard(req.headers, req.nextUrl.searchParams.get("tenantId"));
+  if ("error" in access) return access.error;
+  return NextResponse.json(await queryOverview(access.tenant.id));
+}
 
-  const tenant = tenantAccess(viewer, req.nextUrl.searchParams.get("tenantId"));
-  if (!tenant) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+// Rename: { tenantId, from, to }
+export async function PATCH(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const access = await guard(req.headers, body?.tenantId, "write");
+  if ("error" in access) return access.error;
 
-  const rows = await db
-    .select({ name: assets.folder, count: count() })
-    .from(assets)
-    .where(and(eq(assets.tenantId, tenant.id), isNotNull(assets.folder)))
-    .groupBy(assets.folder)
-    .orderBy(asc(assets.folder));
+  const to = normalizeFolder(body?.to);
+  if (!to || typeof body?.from !== "string") return jsonError("Folder name is required", 400);
+  const moved = await db
+    .update(assets)
+    .set({ folder: to, updatedAt: new Date() })
+    .where(and(eq(assets.tenantId, access.tenant.id), eq(assets.folder, body.from)))
+    .returning({ id: assets.id });
+  return NextResponse.json({ count: moved.length });
+}
 
-  const folders: FolderSummary[] = rows.map((r) => ({ name: r.name!, count: r.count }));
-  return NextResponse.json({ folders });
+// Delete: { tenantId, name, deleteContents } — contents move to Unfiled unless deleteContents
+export async function DELETE(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const deleteContents = body?.deleteContents === true;
+  const access = await guard(req.headers, body?.tenantId, deleteContents ? "delete" : "write");
+  if ("error" in access) return access.error;
+  if (typeof body?.name !== "string") return jsonError("Folder name is required", 400);
+
+  const scope = and(eq(assets.tenantId, access.tenant.id), eq(assets.folder, body.name));
+  if (deleteContents) {
+    const deleted = await db.delete(assets).where(scope).returning({ url: assets.url, source: assets.source });
+    await removeOrphanedUploads(deleted);
+    return NextResponse.json({ count: deleted.length });
+  }
+  const moved = await db.update(assets).set({ folder: null, updatedAt: new Date() }).where(scope).returning({ id: assets.id });
+  return NextResponse.json({ count: moved.length });
 }

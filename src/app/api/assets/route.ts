@@ -1,61 +1,77 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { and, count, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { assets } from "@/lib/db/schema";
-import { getViewer, tenantAccess } from "@/lib/access";
-import { ASSET_TYPES, UNFILED, assetTypeCondition, toAsset } from "@/lib/assets";
-import type { AssetPage, AssetType } from "@/lib/types";
-
-const PAGE_SIZE = 60;
+import { guard, jsonError } from "@/lib/api";
+import { assetTypeOf, normalizeFolder, toAsset } from "@/lib/assets";
+import { queryAssets } from "@/lib/queries";
+import type { AssetSort, AssetType } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
-  const viewer = await getViewer(req.headers);
-  if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   const params = req.nextUrl.searchParams;
-  const tenant = tenantAccess(viewer, params.get("tenantId"));
-  if (!tenant) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const access = await guard(req.headers, params.get("tenantId"));
+  if ("error" in access) return access.error;
 
-  const conditions: SQL[] = [eq(assets.tenantId, tenant.id)];
+  const page = await queryAssets(access.tenant.id, {
+    q: params.get("q") ?? undefined,
+    type: params.get("type") as AssetType | null,
+    folder: params.get("folder"),
+    sort: (params.get("sort") as AssetSort | null) ?? undefined,
+    offset: Number(params.get("offset")) || 0,
+  });
+  return NextResponse.json(page);
+}
 
-  const q = params.get("q")?.trim();
-  if (q) {
-    const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-    conditions.push(
-      or(
-        ilike(assets.name, pattern),
-        ilike(assets.originalFilename, pattern),
-        ilike(assets.description, pattern),
-        sql`${assets.tags}::text ilike ${pattern}`
-      )!
-    );
+// Add a file by URL; the file stays where it is hosted
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const access = await guard(req.headers, body?.tenantId, "write");
+  if ("error" in access) return access.error;
+
+  let url: URL;
+  try {
+    url = new URL(String(body?.url ?? "").trim());
+  } catch {
+    return jsonError("Enter a valid URL", 400);
   }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return jsonError("Only http(s) links are supported", 400);
 
-  const type = params.get("type") as AssetType | null;
-  if (type && ASSET_TYPES.includes(type)) conditions.push(assetTypeCondition(type));
+  let mimeType: string | null = null;
+  let fileSize: number | null = null;
+  try {
+    const res = await fetch(url, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) });
+    mimeType = res.headers.get("content-type")?.split(";")[0].trim() || null;
+    const length = Number(res.headers.get("content-length"));
+    fileSize = Number.isFinite(length) && length > 0 && length < 2 ** 31 ? length : null;
+  } catch {}
+  if (!mimeType || mimeType === "application/octet-stream") mimeType = guessMime(url.pathname) ?? mimeType;
 
-  const folder = params.get("folder");
-  if (folder === UNFILED) conditions.push(isNull(assets.folder));
-  else if (folder) conditions.push(eq(assets.folder, folder));
+  const filename = decodeURIComponent(url.pathname.split("/").pop() || "") || url.hostname;
+  const name = (String(body?.name ?? "").trim() || filename.replace(/\.[^.]+$/, "") || filename).slice(0, 255);
 
-  const offset = Math.max(0, Number(params.get("offset")) || 0);
-  const where = and(...conditions);
+  const [row] = await db
+    .insert(assets)
+    .values({
+      tenantId: access.tenant.id,
+      name,
+      url: url.toString(),
+      mimeType,
+      fileSize,
+      folder: normalizeFolder(body?.folder),
+      category: assetTypeOf(mimeType, null),
+      source: "url",
+      originalFilename: filename.slice(0, 255),
+      tags: [],
+    })
+    .returning();
+  return NextResponse.json(toAsset(row), { status: 201 });
+}
 
-  const [rows, [{ total }]] = await Promise.all([
-    db
-      .select()
-      .from(assets)
-      .where(where)
-      .orderBy(desc(assets.createdAt), desc(assets.id))
-      .limit(PAGE_SIZE)
-      .offset(offset),
-    db.select({ total: count() }).from(assets).where(where),
-  ]);
-
-  const body: AssetPage = {
-    assets: rows.map(toAsset),
-    total,
-    nextOffset: offset + rows.length < total ? offset + rows.length : null,
+function guessMime(pathname: string): string | null {
+  const ext = pathname.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp",
+    svg: "image/svg+xml", avif: "image/avif", mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+    pdf: "application/pdf", doc: "application/msword", zip: "application/zip", txt: "text/plain",
   };
-  return NextResponse.json(body);
+  return ext ? map[ext] ?? null : null;
 }
