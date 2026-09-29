@@ -22,6 +22,21 @@ export interface Asset {
   updatedAt: string;
   tags: string[];
   folder: string | null;
+  /**
+   * Records in other AXXES apps that this file is attached to.
+   *
+   * A left join onto a link table Folders owns, so most files have none. Folders
+   * cannot join onto another app's tables, so it holds (appKey, recordId) and
+   * resolves it through a per-app URL registry — one mechanism for the whole
+   * suite rather than a bespoke column per app.
+   */
+  appLinks?: AssetAppLink[];
+}
+
+export interface AssetAppLink {
+  /** Catalog key of the owning app, e.g. "office". */
+  appKey: string;
+  recordId: string;
 }
 
 export interface AssetQuery {

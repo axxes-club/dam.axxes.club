@@ -26,7 +26,7 @@ export default async function SharePage({ params }: { params: { token: string } 
   let items: Asset[];
   if (payload.k === "asset") {
     const rows = await db.select().from(assets).where(and(eq(assets.id, payload.id), eq(assets.tenantId, payload.t)));
-    items = rows.map(toAsset);
+    items = rows.map((row) => toAsset(row));
     if (!items.length) return <Unavailable />;
   } else {
     const rows = await db
@@ -35,7 +35,7 @@ export default async function SharePage({ params }: { params: { token: string } 
       .where(and(eq(assets.tenantId, payload.t), eq(assets.folder, payload.f)))
       .orderBy(asc(assets.name))
       .limit(FOLDER_LIMIT);
-    items = rows.map(toAsset);
+    items = rows.map((row) => toAsset(row));
   }
 
   return (

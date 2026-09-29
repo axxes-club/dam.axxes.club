@@ -1,8 +1,8 @@
 import { and, count, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "./db";
-import { assets } from "./db/schema";
+import { assetAppLinks, assets } from "./db/schema";
 import { ASSET_TYPES, PAGE_SIZE, assetOrderBy, assetTypeCondition, toAsset } from "./assets";
-import { UNFILED, type AssetPage, type AssetQuery, type Overview } from "./types";
+import { UNFILED, type AssetAppLink, type AssetPage, type AssetQuery, type Overview } from "./types";
 
 export async function queryAssets(tenantId: string, query: AssetQuery): Promise<AssetPage> {
   const conditions: SQL[] = [eq(assets.tenantId, tenantId)];
@@ -27,12 +27,30 @@ export async function queryAssets(tenantId: string, query: AssetQuery): Promise<
   const where = and(...conditions);
 
   const [rows, [{ total }]] = await Promise.all([
-    db.select().from(assets).where(where).orderBy(...assetOrderBy(query.sort)).limit(PAGE_SIZE).offset(offset),
+    db
+      .select({
+        row: assets,
+        // A file can be attached to several apps at once, so the links come back
+        // as a json array rather than a second row per app. Scoped to the
+        // workspace: a link row is not permission to read another tenant's file.
+        appLinks: sql<{ appKey: string; recordId: string }[] | null>`(select coalesce(json_agg(json_build_object(
+              'appKey', ${assetAppLinks.appKey},
+              'recordId', ${assetAppLinks.recordId}::text
+            )), '[]'::json)
+            from ${assetAppLinks}
+            where ${assetAppLinks.assetId} = ${assets.id}
+              and ${assetAppLinks.tenantId} = ${tenantId})`,
+      })
+      .from(assets)
+      .where(where)
+      .orderBy(...assetOrderBy(query.sort))
+      .limit(PAGE_SIZE)
+      .offset(offset),
     db.select({ total: count() }).from(assets).where(where),
   ]);
 
   return {
-    assets: rows.map(toAsset),
+    assets: rows.map((r) => toAsset(r.row, (r.appLinks ?? []) as AssetAppLink[])),
     total,
     nextOffset: offset + rows.length < total ? offset + rows.length : null,
   };

@@ -1,6 +1,6 @@
 import { asc, desc, sql, type SQL } from "drizzle-orm";
 import { assets, type AssetRow } from "./db/schema";
-import { UNFILED, type Asset, type AssetSort, type AssetType } from "./types";
+import { UNFILED, type Asset, type AssetAppLink, type AssetSort, type AssetType } from "./types";
 
 export const ASSET_TYPES: AssetType[] = ["image", "video", "document", "other"];
 
@@ -50,7 +50,12 @@ export function assetOrderBy(sort: AssetSort | undefined) {
   }
 }
 
-export function toAsset(row: AssetRow): Asset {
+/**
+ * The records in other AXXES apps this file is attached to. Passed separately
+ * because they arrive from a subquery, and a file with no links must still come
+ * back complete.
+ */
+export function toAsset(row: AssetRow, appLinks?: AssetAppLink[]): Asset {
   return {
     id: row.id,
     tenantId: row.tenantId,
@@ -70,6 +75,7 @@ export function toAsset(row: AssetRow): Asset {
     updatedAt: row.updatedAt.toISOString(),
     tags: Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === "string") : [],
     folder: row.folder,
+    appLinks: appLinks ?? [],
   };
 }
 

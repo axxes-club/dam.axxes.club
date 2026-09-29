@@ -35,3 +35,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*
+
+# one-off codemod scripts, already applied
+patch_*.js
+create_table.js

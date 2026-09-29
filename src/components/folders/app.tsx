@@ -16,6 +16,7 @@ import {
   Download,
   ExternalLink,
   Eye,
+  FilePen,
   FileText,
   Folder,
   FolderInput,
@@ -73,6 +74,7 @@ import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useUploadThing } from "@/utils/uploadthing";
 import { FOLDER_HEADER, TENANT_HEADER } from "@/lib/upload-headers";
+import { appTarget, type AppLinkTarget } from "@/lib/app-links";
 import { UNFILED, type Asset, type AssetPage, type AssetSort, type AssetType, type Overview, type Viewer } from "@/lib/types";
 import { api, downloadAsset, formatBytes, notify, plural, Thumb, TypeIcon, useDebounced } from "./utils";
 import { FolderDialogs, type DialogState } from "./dialogs";
@@ -81,6 +83,24 @@ import PhotoHandoffDialog from "./PhotoHandoffDialog";
 
 const TENANT_KEY = "folders:tenant";
 const LAYOUT_KEY = "folders:layout";
+/** Opens a file in another AXXES app, in a new tab like every other "open in". */
+function openApp(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+/**
+ * Whether a file is worth offering to open in Office: documents and
+ * spreadsheets, because those are what Office edits. A video or a photo is not
+ * something Quill can usefully turn into a document.
+ */
+function canOpenInOffice(asset: { type: string; mimeType?: string | null }): boolean {
+  if (asset.type !== "document") return false;
+  const mime = asset.mimeType ?? "";
+  return !mime.startsWith("video/") && !mime.startsWith("audio/");
+}
+
+const officeTarget: AppLinkTarget | null = appTarget("office");
+
 const DRAG_MIME = "application/x-folders-ids";
 const PORTAL_URL = "https://members.axxes.club/assets";
 
@@ -821,6 +841,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                     onTag={(ids) => setDialog({ kind: "tags", ids })}
                     onDuplicate={duplicate}
                     onDelete={askDelete}
+                    tenantId={tenantId}
                   />
                 ) : menuTarget.kind === "folder" ? (
                   <>
@@ -1343,9 +1364,11 @@ function AssetMenu({
   onTag,
   onDuplicate,
   onDelete,
+  tenantId,
 }: {
   ids: string[];
   asset: Asset | null;
+  tenantId: string | null;
   folders: string[];
   currentFolder: string | null;
   canWrite: boolean;
@@ -1371,6 +1394,22 @@ function AssetMenu({
           <ContextMenuItem onClick={() => onPreview(asset.id)}>
             <Eye /> Preview <ContextMenuShortcut>↵</ContextMenuShortcut>
           </ContextMenuItem>
+          {asset.appLinks?.map((link) => {
+            const target = appTarget(link.appKey);
+            if (!target) return null;
+            return (
+              <ContextMenuItem key={link.appKey} onClick={() => openApp(target.url(link.recordId, tenantId))}>
+                <FilePen /> Open in {target.name}
+              </ContextMenuItem>
+            );
+          })}
+          {officeTarget && !(asset.appLinks ?? []).some((l) => l.appKey === "office") && canOpenInOffice(asset) && (
+            <ContextMenuItem
+              onClick={() => openApp(officeTarget.openUnlinked!(asset.id, tenantId))}
+            >
+              <FilePen /> Open in {officeTarget.name}
+            </ContextMenuItem>
+          )}
           <ContextMenuItem onClick={() => window.open(asset.url, "_blank", "noopener,noreferrer")}>
             <ExternalLink /> Open in new tab
           </ContextMenuItem>

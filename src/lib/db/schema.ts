@@ -115,3 +115,18 @@ export const uploadSessions = pgTable("upload_sessions", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
+
+// ── Links to records in other AXXES apps ───────────────────────────────────
+//
+// This app owns none of this and runs no migrations against it: the portal
+// (members.axxes.club) owns `asset_app_links`, and a product only maps the
+// columns it joins on. It exists so a folder can offer "Open in …" for whatever
+// a file is attached to, without knowing any other app's schema.
+
+export const assetAppLinks = pgTable("asset_app_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  assetId: uuid("asset_id").notNull(),
+  appKey: text("app_key").notNull(),
+  recordId: uuid("record_id").notNull(),
+});
