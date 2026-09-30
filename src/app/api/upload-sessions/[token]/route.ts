@@ -14,7 +14,7 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   const expired = session.expiresAt.getTime() < Date.now();
   
   return NextResponse.json({
-    photos: (session.photos || []).map(url => ({ url })),
+    photos: expired ? [] : (session.photos || []).filter(url=>url.startsWith("/api/assets/")).map(url => ({ url })),
     expiresAt: session.expiresAt.toISOString(),
     expired
   });

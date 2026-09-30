@@ -61,6 +61,7 @@ export function TypeIcon({ asset, className }: { asset: Asset; className?: strin
 
 export function Thumb({ asset, className, iconClassName }: { asset: Asset; className?: string; iconClassName?: string }) {
   const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [asset.id, asset.url, asset.thumbnailUrl]);
   if (asset.type === "image" && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -78,6 +79,7 @@ export function Thumb({ asset, className, iconClassName }: { asset: Asset; class
   return (
     <div className={cn("flex h-full w-full flex-col items-center justify-center gap-1.5", className)}>
       <TypeIcon asset={asset} className={cn("size-10", iconClassName)} />
+      {failed && <span className="text-xs text-muted-foreground" role="status">Image unavailable</span>}
       {ext && <span className="text-[10px] font-semibold tracking-wider text-muted-foreground">{ext}</span>}
     </div>
   );
