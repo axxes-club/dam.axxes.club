@@ -600,9 +600,9 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
     <div className="flex h-dvh bg-sidebar text-foreground">
       {/* ── Sidebar ── */}
       <aside data-collapsed={sidebarCollapsed} className={cn("group/sidebar hidden shrink-0 flex-col px-3 pb-3 transition-[width] md:flex", sidebarCollapsed ? "w-16" : "w-64")} aria-label="Navigation">
-        <div className="flex h-16 items-center px-3">
+        <div className={cn("flex h-16 items-center", sidebarCollapsed ? "justify-center" : "px-3")}>
           <div className={cn(sidebarCollapsed && "hidden")}><Logo /></div>
-          <button type="button" aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed(x => !x)} className="ml-auto rounded-full p-1 hover:bg-muted"><PanelLeft className="size-4" /></button>
+          <button type="button" aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed(x => !x)} className={cn("rounded-full p-1 hover:bg-muted", !sidebarCollapsed && "ml-auto")}><PanelLeft className="size-4" /></button>
         </div>
         {canWrite && !sidebarCollapsed && (
           <NewMenu
@@ -628,7 +628,7 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
 
           <button
             type="button"
-            className="mt-4 flex w-full items-center gap-1 px-4 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0 mt-4 flex w-full items-center gap-1 px-4 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
             onClick={() => setFoldersExpanded((x) => !x)}
             aria-expanded={foldersExpanded}
           >
