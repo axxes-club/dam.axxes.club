@@ -697,7 +697,7 @@ function FoldersAppInner({ viewer, handshakeUrl, initialTenantId }: { viewer: Vi
           <div className="ml-auto flex items-center gap-2">
             <div className="md:hidden"><AllAppsSwitcher tenantId={tenant.id} compact /></div>
             <div className="md:hidden"><OrganizationMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} switchTenant={switchTenant} collapsed /></div>
-            <AccountMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} role={tenant.role} onSignOut={signOut} switchTenant={switchTenant} accountUrl={handshakeUrl} />
+            <AccountMenu viewer={viewer} tenantName={tenant.name} role={tenant.role} onSignOut={signOut} accountUrl={handshakeUrl} />
           </div>
         </header>
 
@@ -1112,7 +1112,7 @@ function NavItem({
   );
 }
 
-function AccountMenu({ viewer, tenantId, tenantName, role, onSignOut, switchTenant, accountUrl }: { viewer: Viewer; tenantId: string; tenantName: string; role: string; onSignOut: () => void; switchTenant: (id: string) => void; accountUrl: string | null }) {
+function AccountMenu({ viewer, tenantName, role, onSignOut, accountUrl }: { viewer: Viewer; tenantName: string; role: string; onSignOut: () => void; accountUrl: string | null }) {
   const initials = (viewer.name || viewer.email).split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   return (
     <DropdownMenu>
