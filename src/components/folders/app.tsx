@@ -306,6 +306,10 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
   };
 
   const switchTenant = (id: string) => {
+    if (!viewer.tenants.some(t => t.id === id)) {
+      setLoadError("Could not switch organization. Access is unavailable.");
+      return;
+    }
     setTenantId(id);
     setDraftFolders([]);
     go({ kind: "home" });
