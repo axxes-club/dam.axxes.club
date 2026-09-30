@@ -118,7 +118,7 @@ export function AllAppsSwitcher({ tenantId, compact = false }: { tenantId?: stri
         <div className="axxes-apps-footer">AXXES suite · Opens in a new tab</div>
       </div>
     </>, document.body)}
-    <style>{`
+    <style dangerouslySetInnerHTML={{ __html: `
       .axxes-all-apps-trigger{display:flex;align-items:center;gap:8px;width:100%;padding:8px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;text-align:left}
       .axxes-all-apps-trigger:hover{background:var(--panel-2,rgba(128,128,128,.12))}
       .axxes-all-apps-compact{justify-content:center;padding:8px 0}.axxes-all-apps-compact .axxes-all-apps-label{display:none}
@@ -133,6 +133,6 @@ export function AllAppsSwitcher({ tenantId, compact = false }: { tenantId?: stri
       .axxes-apps-description{min-width:0;flex:1}.axxes-apps-description strong,.axxes-apps-description>span{display:block}.axxes-apps-description>span{font-size:11px;opacity:.65;margin-top:3px;line-height:1.4;overflow-wrap:anywhere}
       .axxes-apps-footer{flex:none;padding:10px 12px;border-top:1px solid rgba(128,128,128,.2);font-size:10px;opacity:.65}
       .axxes-apps-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    `}</style>
+    ` }} />
   </>
 }
