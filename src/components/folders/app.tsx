@@ -35,6 +35,8 @@ import {
   Loader2,
   LogOut,
   MoreVertical,
+  PanelLeft,
+  Building2,
   Pencil,
   Plus,
   RefreshCw,
@@ -151,6 +153,7 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
   const router = useRouter();
 
   // ── Workspace ──
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const [tenantId, setTenantId] = React.useState<string | null>(viewer.tenants[0]?.id ?? null);
   React.useEffect(() => {
     try {
@@ -592,11 +595,12 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
   return (
     <div className="flex h-dvh bg-sidebar text-foreground">
       {/* ── Sidebar ── */}
-      <aside className="hidden w-64 shrink-0 flex-col px-3 pb-3 md:flex" aria-label="Navigation">
+      <aside data-collapsed={sidebarCollapsed} className={cn("group/sidebar hidden shrink-0 flex-col px-3 pb-3 transition-[width] md:flex", sidebarCollapsed ? "w-16" : "w-64")} aria-label="Navigation">
         <div className="flex h-16 items-center px-3">
-          <Logo />
+          <div className={cn(sidebarCollapsed && "hidden")}><Logo /></div>
+          <button type="button" aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed(x => !x)} className="ml-auto rounded-full p-1 hover:bg-muted"><PanelLeft className="size-4" /></button>
         </div>
-        {canWrite && (
+        {canWrite && !sidebarCollapsed && (
           <NewMenu
             onUpload={() => fileInputRef.current?.click()}
             onAddUrl={() => setDialog({ kind: "add-url", folder: currentFolder })}
@@ -625,7 +629,7 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
             aria-expanded={foldersExpanded}
           >
             <ChevronRight className={cn("size-3.5 transition-transform", foldersExpanded && "rotate-90")} />
-            Folders
+            <span className="group-data-[collapsed=true]/sidebar:hidden">Folders</span>
           </button>
           {foldersExpanded &&
             folderNames.map((name) => (
@@ -645,7 +649,8 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
             <p className="px-4 py-1 text-xs text-muted-foreground">No folders yet</p>
           )}
         </nav>
-        <div className="mt-2 px-4 text-xs text-muted-foreground">
+        <OrganizationMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} switchTenant={switchTenant} collapsed={sidebarCollapsed} />
+        <div className={cn("mt-2 px-4 text-xs text-muted-foreground", sidebarCollapsed && "hidden")}>
           <div className="flex items-center gap-2">
             <HardDrive className="size-4" />
             <span>{overview ? `${formatBytes(storage)} in ${plural(overview.counts.all, "file")}` : "…"}</span>
@@ -674,6 +679,7 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
             )}
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <div className="md:hidden"><OrganizationMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} switchTenant={switchTenant} collapsed /></div>
             <AccountMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} role={tenant.role} onSignOut={signOut} switchTenant={switchTenant} accountUrl={handshakeUrl} />
           </div>
         </header>
@@ -1074,16 +1080,17 @@ function NavItem({
     <button
       type="button"
       onClick={onClick}
+      title={label}
       className={cn(
-        "flex h-9 w-full items-center gap-4 rounded-full px-4 text-left transition-colors hover:bg-muted",
+        "group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0 flex h-9 w-full items-center gap-4 rounded-full px-4 text-left transition-colors hover:bg-muted",
         active && "bg-accent font-medium text-accent-foreground hover:bg-accent",
         dropActive && "bg-primary text-primary-foreground hover:bg-primary"
       )}
       {...drop}
     >
       <Icon className={cn("size-[18px] shrink-0", !dropActive && iconClassName)} />
-      <span className="flex-1 truncate">{label}</span>
-      {count !== undefined && count > 0 && <span className="text-xs tabular-nums text-muted-foreground">{count.toLocaleString()}</span>}
+      <span className="flex-1 truncate group-data-[collapsed=true]/sidebar:hidden">{label}</span>
+      {count !== undefined && count > 0 && <span className="text-xs tabular-nums text-muted-foreground group-data-[collapsed=true]/sidebar:hidden">{count.toLocaleString()}</span>}
     </button>
   );
 }
@@ -1110,18 +1117,6 @@ function AccountMenu({ viewer, tenantId, tenantName, role, onSignOut, switchTena
             {tenantName} · <span className="capitalize">{role}</span>
           </p>
         </div>
-        {viewer.tenants.length > 1 && (
-          <>
-            <DropdownMenuSeparator />
-            <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Organizations</div>
-            {viewer.tenants.map(t => (
-              <DropdownMenuItem key={t.id} onClick={() => switchTenant(t.id)}>
-                {t.id === tenantId ? <Check className="mr-2 h-4 w-4" /> : <div className="mr-2 h-4 w-4" />}
-                {t.name}
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => window.open(PORTAL_URL, "_blank", "noopener,noreferrer")}>
           <ExternalLink /> Open in members portal
@@ -1528,4 +1523,16 @@ function Empty({ icon: Icon, title, body, children }: { icon: React.ElementType;
       {children && <div className="mt-3" onClick={(e) => e.stopPropagation()}>{children}</div>}
     </div>
   );
+}
+
+function OrganizationMenu({ viewer, tenantId, tenantName, switchTenant, collapsed }: { viewer: Viewer; tenantId: string; tenantName: string; switchTenant: (id: string) => void; collapsed: boolean }) {
+  return <DropdownMenu>
+    <DropdownMenuTrigger render={<button type="button" aria-label={`Switch organization (${tenantName})`} className="mt-3 flex w-full items-center gap-2 rounded-full p-2 text-sm hover:bg-muted" />}>
+      <Building2 className="size-4 shrink-0" />{!collapsed && <span className="truncate">{tenantName}</span>}
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start" className="w-64">
+      <div className="px-3 py-2 text-xs text-muted-foreground">Organizations</div>
+      {viewer.tenants.map(t => <DropdownMenuItem key={t.id} onClick={() => switchTenant(t.id)}>{t.id === tenantId && <Check className="size-4" />}{t.name}</DropdownMenuItem>)}
+    </DropdownMenuContent>
+  </DropdownMenu>
 }
