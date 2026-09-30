@@ -5,7 +5,17 @@ export const UNFILED = '__unfiled__';
 
 export interface Asset {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
+  ownerUserId?: string | null;
+  uploadedById?: string | null;
+  ownerName?: string | null;
+  uploadedByName?: string | null;
+  effectiveExpiresAt?: string | null;
+  expiresAt?: string | null;
+  trashedAt?: string | null;
+  trashReason?: string | null;
+  appKey?: string | null;
+  storageKey?: string | null;
   name: string;
   description: string | null;
   altText: string | null;
@@ -58,15 +68,27 @@ export interface FolderSummary {
   count: number;
   // Up to three recent image URLs, used for folder tile previews
   previews: string[];
+  expiresAt?: string | null;
+}
+
+export interface FolderPolicy {
+ trashReason?: string | null;
+ id?: string;
+ path: string;
+ expiresAt: string | null;
+ trashedAt: string | null;
 }
 
 export interface Overview {
+  folderPolicies?: FolderPolicy[];
   folders: FolderSummary[];
   counts: { all: number; image: number; video: number; document: number; unfiled: number };
   storageBytes: number;
 }
 
 export interface TenantAccess {
+  canManage?: boolean;
+  folder?: string | null;
   id: string;
   name: string;
   role: string;

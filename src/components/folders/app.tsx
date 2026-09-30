@@ -75,10 +75,11 @@ import { cn } from "@/lib/utils";
 import { useUploadThing } from "@/utils/uploadthing";
 import { FOLDER_HEADER, TENANT_HEADER } from "@/lib/upload-headers";
 import { appTarget, type AppLinkTarget } from "@/lib/app-links";
-import { UNFILED, type Asset, type AssetPage, type AssetSort, type AssetType, type Overview, type Viewer } from "@/lib/types";
+import { UNFILED, type Asset, type AssetPage, type AssetSort, type AssetType, type Overview, type TenantAccess, type Viewer } from "@/lib/types";
 import { api, downloadAsset, formatBytes, notify, plural, Thumb, TypeIcon, useDebounced } from "./utils";
 import { FolderDialogs, type DialogState } from "./dialogs";
 import { DetailsPanel, Preview } from "./details";
+import { TrashList } from "./trash";
 import PhotoHandoffDialog from "./PhotoHandoffDialog";
 
 const TENANT_KEY = "folders:tenant";
@@ -104,7 +105,7 @@ const officeTarget: AppLinkTarget | null = appTarget("office");
 const DRAG_MIME = "application/x-folders-ids";
 const PORTAL_URL = "https://members.axxes.club/assets";
 
-type View = { kind: "home" } | { kind: "recent" } | { kind: "type"; type: AssetType } | { kind: "folder"; folder: string };
+type View = { kind: "trash" } | { kind: "home" } | { kind: "recent" } | { kind: "type"; type: AssetType } | { kind: "folder"; folder: string };
 type MenuTarget = { kind: "assets"; ids: string[] } | { kind: "folder"; folder: string } | { kind: "background" };
 
 const TYPE_NAV: { type: AssetType; label: string; icon: React.ElementType }[] = [
@@ -137,18 +138,30 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   const router = useRouter();
 
   // ── Workspace ──
-  const [tenantId, setTenantId] = React.useState<string | null>(viewer.tenants[0]?.id ?? null);
+  const [tenantId, setTenantId] = React.useState<string | null>("personal");
   React.useEffect(() => {
     try {
       const stored = localStorage.getItem(TENANT_KEY);
-      if (stored && viewer.tenants.some((t) => t.id === stored)) setTenantId(stored);
+      if (stored && (stored === "personal" || viewer.tenants.some((t) => t.id === stored))) setTenantId(stored);
       const layout = localStorage.getItem(LAYOUT_KEY);
       if (layout === "grid" || layout === "list") setLayout(layout);
     } catch {}
   }, [viewer.tenants]);
-  const tenant = viewer.tenants.find((t) => t.id === tenantId) ?? null;
+  const [libraries, setLibraries] = React.useState<TenantAccess[]>([{ id: "personal", name: "Personal library", role: "owner", canWrite: true, canDelete: true }, ...viewer.tenants.filter(t => t.id !== "personal")]);
+  const [scopeFolder, setScopeFolder] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    api<{libraries:TenantAccess[]}>("/api/libraries").then(result=>{
+      if(cancelled) return;
+      setLibraries(result.libraries);
+      try {const stored=localStorage.getItem(TENANT_KEY);const folder=localStorage.getItem("folders:scope");if(result.libraries.some(l=>l.id===stored&&(l.folder??null)===(folder||null))){setTenantId(stored);setScopeFolder(folder||null);}else{setTenantId("personal");setScopeFolder(null);}}catch{}
+    }).catch(error=>notify.error(error));
+    return ()=>{cancelled=true;};
+  },[]);
+  const tenant = libraries.find((t) => t.id === tenantId && (t.folder ?? null) === scopeFolder) ?? null;
   const canWrite = !!tenant?.canWrite;
   const canDelete = !!tenant?.canDelete;
+  const canManage = tenant?.canManage ?? (canWrite && !scopeFolder);
 
 
   // ── View ──
@@ -184,12 +197,14 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const query = React.useMemo(() => {
+    if (view.kind === "trash") return { trash: "1", ...(scopeFolder ? {folder:scopeFolder} : {}), ...(q ? {q} : {}) };
+    if (scopeFolder) return {folder:view.kind === "folder" ? view.folder : scopeFolder,...(q ? {q} : {}),...(view.kind === "type" ? {type:view.type}: {})};
     if (q) return { q };
     if (view.kind === "home") return { folder: UNFILED };
     if (view.kind === "type") return { type: view.type };
     if (view.kind === "folder") return { folder: view.folder };
     return {};
-  }, [q, view]);
+  }, [q, view, scopeFolder]);
 
   const listUrl = React.useCallback(
     (offset: number) => {
@@ -203,9 +218,9 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   const refreshOverview = React.useCallback(async () => {
     if (!tenantId) return;
     try {
-      setOverview(await api<Overview>(`/api/folders?tenantId=${tenantId}`));
+      setOverview(await api<Overview>(`/api/folders?tenantId=${encodeURIComponent(tenantId)}${scopeFolder ? `&folder=${encodeURIComponent(scopeFolder)}` : ""}`));
     } catch {}
-  }, [tenantId]);
+  }, [tenantId, scopeFolder]);
 
   React.useEffect(() => {
     setOverview(null);
@@ -269,11 +284,11 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   const assetById = React.useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets]);
   const selectedIds = React.useMemo(() => assets.filter((a) => selected.has(a.id)).map((a) => a.id), [assets, selected]);
   const single = selectedIds.length === 1 ? assetById.get(selectedIds[0]) ?? null : null;
-  const currentFolder = view.kind === "folder" ? view.folder : null;
+  const currentFolder = view.kind === "folder" ? view.folder : scopeFolder;
 
   const title = q
     ? "Search results"
-    : view.kind === "home"
+    : view.kind === "trash" ? "Trash" : view.kind === "home"
       ? "Home"
       : view.kind === "recent"
         ? "Recent"
@@ -288,12 +303,14 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
     setAnchorId(null);
   };
 
-  const switchTenant = (id: string) => {
+  const switchTenant = (id: string, folder: string | null = null) => {
     setTenantId(id);
+    setScopeFolder(folder);
     setDraftFolders([]);
     go({ kind: "home" });
     try {
       localStorage.setItem(TENANT_KEY, id);
+      if(folder) localStorage.setItem("folders:scope",folder); else localStorage.removeItem("folders:scope");
     } catch {}
   };
 
@@ -389,11 +406,6 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
 
   const askDeleteFolder = (folder: string) => {
     const count = folderInfo.get(folder)?.count ?? 0;
-    if (count === 0) {
-      setDraftFolders((d) => d.filter((f) => f !== folder));
-      if (currentFolder === folder) go({ kind: "home" });
-      return;
-    }
     setDialog({ kind: "delete-folder", folder, count });
   };
 
@@ -401,11 +413,12 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   const inView = (folder: string | null) => {
     if (q || view.kind === "recent" || view.kind === "type") return true;
     if (view.kind === "home") return folder === null;
-    return folder === view.folder;
+    return view.kind === "folder" && folder === view.folder;
   };
 
   const handleUpdated = (updated: Asset) => {
-    if (!inView(updated.folder)) {
+    setReloadKey(k=>k+1);
+    if (updated.trashedAt || (updated.expiresAt && Date.parse(updated.expiresAt) <= Date.now()) || !inView(updated.folder)) {
       setAssets((prev) => prev.filter((a) => a.id !== updated.id));
       setTotal((t) => Math.max(0, t - 1));
       clearSelection();
@@ -462,7 +475,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   });
 
   const uploadFiles = (files: File[]) => {
-    if (!canWrite || !files.length) return;
+    if (view.kind === "trash" || !canWrite || !files.length) return;
     uploadToast.current = notify.loading(`Uploading ${plural(files.length, "file")}…`);
     startUpload(files);
   };
@@ -470,7 +483,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   // ── Keyboard ──
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (dialog || previewIndex != null || isTypingTarget(e.target)) return;
+      if (view.kind === "trash" || dialog || previewIndex != null || isTypingTarget(e.target)) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "a") {
         e.preventDefault();
@@ -482,7 +495,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
         askDelete(selectedIds);
       } else if (e.key === "Enter" && single) {
         openPreview(single.id);
-      } else if (e.key === "F2" && single && canWrite) {
+      } else if (e.key === "F2" && single && canManage) {
         e.preventDefault();
         setDialog({ kind: "rename", asset: single });
       } else if (e.key === "/") {
@@ -516,7 +529,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
 
   // ── Drag & drop ──
   const onItemDragStart = (e: React.DragEvent, id: string) => {
-    if (!canWrite) return;
+    if (!canManage) return;
     const ids = selected.has(id) ? selectedIds : [id];
     if (!selected.has(id)) selectOnly(id);
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(ids));
@@ -525,7 +538,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
 
   const dropProps = (target: string | null) => ({
     onDragOver: (e: React.DragEvent) => {
-      if (!canWrite || !e.dataTransfer.types.includes(DRAG_MIME)) return;
+      if (!canManage || !e.dataTransfer.types.includes(DRAG_MIME)) return;
       e.preventDefault();
       e.stopPropagation();
       setDropFolder(target ?? UNFILED);
@@ -572,7 +585,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   }
 
   const showFolderTiles = !q && view.kind === "home" && folderNames.length > 0;
-  const showDetails = detailsOpen && single;
+  const showDetails = view.kind !== "trash" && detailsOpen && single;
   const storage = overview?.storageBytes ?? 0;
 
   return (
@@ -584,6 +597,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
         </div>
         {canWrite && (
           <NewMenu
+            canManage={!!canManage}
             onUpload={() => fileInputRef.current?.click()}
             onAddUrl={() => setDialog({ kind: "add-url", folder: currentFolder })}
             onNewFolder={() => setDialog({ kind: "new-folder" })}
@@ -592,6 +606,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
         )}
         <nav className="mt-4 flex-1 overflow-y-auto text-sm">
           <NavItem icon={Home} label="Home" active={!q && view.kind === "home"} onClick={() => go({ kind: "home" })} {...dropProps(null)} dropActive={dropFolder === UNFILED} />
+          <NavItem icon={Trash2} label="Trash" active={view.kind === "trash"} onClick={() => go({kind:"trash"})} />
           <NavItem icon={Clock} label="Recent" active={!q && view.kind === "recent"} onClick={() => go({ kind: "recent" })} count={overview?.counts.all} />
           {TYPE_NAV.map((t) => (
             <NavItem
@@ -610,7 +625,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
             onClick={() => setFoldersExpanded((x) => !x)}
             aria-expanded={foldersExpanded}
           >
-            <ChevronRight className={cn("size-3.5 transition-transform", foldersExpanded && "rotate-90")} />
+            <ChevronRight className={cn("size-5 transition-transform", foldersExpanded && "rotate-90")} />
             Folders
           </button>
           {foldersExpanded &&
@@ -641,9 +656,13 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
 
       {/* ── Main ── */}
       <div className="flex min-w-0 flex-1 flex-col pb-3 pr-3 max-md:pl-3">
-        <header className="flex h-16 shrink-0 items-center gap-3">
+        <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 py-2">
+          <select aria-label="Library destination" value={JSON.stringify([tenantId ?? "personal",scopeFolder])} onChange={e=>{const [id,folder]=JSON.parse(e.target.value);switchTenant(id,folder);}} className="h-11 max-w-48 rounded-xl border bg-card px-3 text-sm">
+            {libraries.map(l=><option key={JSON.stringify([l.id,l.folder??null])} value={JSON.stringify([l.id,l.folder??null])}>{l.name}{l.folder ? ` · ${l.folder}` : ""}</option>)}
+          </select>
+          <Button variant="ghost" className="md:hidden" onClick={()=>go({kind:view.kind === "trash" ? "home" : "trash"})}>{view.kind === "trash" ? "Home" : "Trash"}</Button>
           <Logo className="md:hidden" compact />
-          <div className="relative w-full max-w-2xl">
+          <div className="relative min-w-32 flex-1 max-w-2xl">
             <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
             <input
               id="folders-search"
@@ -674,8 +693,8 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                 </Button>
                 <span className="mr-3 font-medium">{selectedIds.length} selected</span>
                 <IconAction label="Download" onClick={() => downloadMany(selectedIds)}><Download /></IconAction>
-                {canWrite && <IconAction label="Move" onClick={() => setDialog({ kind: "move", ids: selectedIds })}><FolderInput /></IconAction>}
-                {canWrite && <IconAction label="Add tags" onClick={() => setDialog({ kind: "tags", ids: selectedIds })}><Tag /></IconAction>}
+                {canManage && <IconAction label="Move" onClick={() => setDialog({ kind: "move", ids: selectedIds })}><FolderInput /></IconAction>}
+                {canManage && <IconAction label="Add tags" onClick={() => setDialog({ kind: "tags", ids: selectedIds })}><Tag /></IconAction>}
                 <IconAction label="Copy links" onClick={() => copyLinks(selectedIds)}><Link2 /></IconAction>
                 {canDelete && <IconAction label="Delete" onClick={() => askDelete(selectedIds)}><Trash2 /></IconAction>}
               </div>
@@ -693,6 +712,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                   <span className="truncate px-2">{title}</span>
                 </h1>
                 <div className="ml-auto flex items-center gap-1">
+                  {currentFolder && canDelete && <Button variant="outline" size="sm" onClick={()=>setDialog({kind:"folder-settings",folder:currentFolder,expiresAt:folderInfo.get(currentFolder)?.expiresAt})}>Manage folder</Button>}
                   <SortMenu sort={sort} onChange={setSort} />
                   <div className="flex rounded-full border border-border p-0.5">
                     <button type="button" onClick={() => changeLayout("list")} className={cn("rounded-full px-3 py-1.5", layout === "list" && "bg-accent text-accent-foreground")} aria-label="List layout">
@@ -709,6 +729,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
               </div>
             )}
 
+            {scopeFolder && <p className="px-6 pb-3 text-xs text-muted-foreground">Shared folder: {scopeFolder} · {canWrite ? "You can view files and upload. Ownership and file management stay with the owner." : "You can view files."}</p>}
             {/* Content */}
             <ContextMenu>
               <ContextMenuTrigger
@@ -764,7 +785,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                   <div className="flex h-64 items-center justify-center text-muted-foreground">
                     <Loader2 className="size-6 animate-spin" />
                   </div>
-                ) : assets.length === 0 ? (
+                ) : view.kind === "trash" ? (<><TrashList assets={assets} folderPolicies={overview?.folderPolicies ?? []} tenantId={tenantId ?? "personal"} canDelete={canDelete} onChanged={reload} />{nextOffset != null && <Button variant="outline" disabled={loadingMore} onClick={e=>{e.stopPropagation();loadMore();}}>Show more</Button>}</>) : assets.length === 0 ? (
                   showFolderTiles ? null : (
                     <Empty
                       icon={q ? Search : view.kind === "folder" ? FolderOpen : Inbox}
@@ -789,7 +810,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                             asset={asset}
                             selected={selected.has(asset.id)}
                             selecting={selected.size > 0}
-                            draggable={canWrite}
+                            draggable={!!canManage}
                             onClick={(e) => handleItemClick(e, asset, index)}
                             onDoubleClick={() => openPreview(asset.id)}
                             onToggle={() => toggle(asset.id)}
@@ -801,7 +822,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                       <FileTable
                         assets={assets}
                         selected={selected}
-                        draggable={canWrite}
+                        draggable={!!canManage}
                         showFolder={view.kind !== "folder" && view.kind !== "home"}
                         onItemClick={handleItemClick}
                         onOpen={openPreview}
@@ -828,7 +849,7 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                     asset={menuTarget.ids.length === 1 ? assetById.get(menuTarget.ids[0]) ?? null : null}
                     folders={folderNames}
                     currentFolder={currentFolder}
-                    canWrite={canWrite}
+                    canWrite={!!canManage}
                     canDelete={canDelete}
                     onPreview={openPreview}
                     onDetails={(id) => { selectOnly(id); setDetailsOpen(true); }}
@@ -849,13 +870,14 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                     <ContextMenuItem onClick={() => go({ kind: "folder", folder: menuTarget.folder })}>
                       <FolderOpen /> Open
                     </ContextMenuItem>
-                    {canWrite && (
+                    {canDelete && (
                       <>
+                        <ContextMenuItem onClick={() => setDialog({kind:"folder-settings",folder:menuTarget.folder,expiresAt:folderInfo.get(menuTarget.folder)?.expiresAt})}><Clock /> Expiration & access</ContextMenuItem>
                         <ContextMenuItem onClick={() => setDialog({ kind: "share", target: { kind: "folder", folder: menuTarget.folder } })}>
                           <Share2 /> Share
                         </ContextMenuItem>
                         <ContextMenuSeparator />
-                        <ContextMenuItem disabled={!folderInfo.get(menuTarget.folder)?.count} onClick={() => setDialog({ kind: "rename-folder", folder: menuTarget.folder })}>
+                        <ContextMenuItem onClick={() => setDialog({ kind: "rename-folder", folder: menuTarget.folder })}>
                           <FolderPen /> Rename
                         </ContextMenuItem>
                         <ContextMenuItem variant="destructive" onClick={() => askDeleteFolder(menuTarget.folder)}>
@@ -866,16 +888,16 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
                   </>
                 ) : (
                   <>
-                    <ContextMenuItem disabled={!canWrite} onClick={() => setDialog({ kind: "new-folder" })}>
+                    <ContextMenuItem disabled={!canManage} onClick={() => setDialog({ kind: "new-folder" })}>
                       <FolderPlus /> New folder
                     </ContextMenuItem>
                     <ContextMenuItem disabled={!canWrite} onClick={() => fileInputRef.current?.click()}>
                       <Upload /> Upload files
                     </ContextMenuItem>
-                    <ContextMenuItem disabled={!canWrite} onClick={() => setDialog({ kind: "add-url", folder: currentFolder })}>
+                    <ContextMenuItem disabled={!canManage} onClick={() => setDialog({ kind: "add-url", folder: currentFolder })}>
                       <Link2 /> Add from link
                     </ContextMenuItem>
-                    {currentFolder && canWrite && (
+                    {currentFolder && canDelete && (
                       <ContextMenuItem onClick={() => setDialog({ kind: "share", target: { kind: "folder", folder: currentFolder } })}>
                         <Share2 /> Share this folder
                       </ContextMenuItem>
@@ -909,13 +931,16 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
           {showDetails && (
             <DetailsPanel
               asset={single}
+              ownerLabel={single.tenantId ? libraries.find(l=>l.id===single.tenantId)?.name ?? "Workspace" : single.ownerUserId === viewer.id ? `${viewer.name} · Personal` : single.ownerName ?? "Personal"}
+              uploaderLabel={single.uploadedById===viewer.id ? viewer.name : single.uploadedByName ?? single.uploadedById ?? "Legacy upload"}
               folders={folderNames}
-              canWrite={canWrite}
+              canWrite={!!canManage}
               canDelete={canDelete}
               onClose={() => setDetailsOpen(false)}
               onSaved={handleUpdated}
               onPreview={() => openPreview(single.id)}
               onShare={() => setDialog({ kind: "share", target: { kind: "asset", id: single.id, name: single.name } })}
+              onTransfer={() => setDialog({kind:"transfer",asset:single})}
               onDelete={() => askDelete([single.id])}
             />
           )}
@@ -934,6 +959,8 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
       />
 
       <FolderDialogs
+        libraries={libraries}
+        onTransferred={asset => handleDeleted([asset.id])}
         state={dialog}
         tenantId={tenant.id}
         folders={folderNames}
@@ -944,8 +971,8 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
         onAssetsDeleted={handleDeleted}
         onChanged={reload}
         onFolderCreated={(name, saved) => {
-          // A folder only exists once it holds files; until then keep a local placeholder
-          if (!saved && !folderNames.includes(name)) setDraftFolders((d) => [...d, name]);
+          // Keep an immediate placeholder while the persisted overview reloads
+          if (!folderNames.includes(name)) setDraftFolders((d) => [...d, name]);
           go({ kind: "folder", folder: name });
           if (saved) refreshOverview();
         }}
@@ -991,7 +1018,7 @@ function Logo({ className, compact }: { className?: string; compact?: boolean })
   );
 }
 
-function NewMenu({ onUpload, onAddUrl, onNewFolder, onHandoff }: { onUpload: () => void; onAddUrl: () => void; onNewFolder: () => void; onHandoff: () => void }) {
+function NewMenu({ canManage, onUpload, onAddUrl, onNewFolder, onHandoff }: { canManage:boolean; onUpload: () => void; onAddUrl: () => void; onNewFolder: () => void; onHandoff: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -1005,11 +1032,11 @@ function NewMenu({ onUpload, onAddUrl, onNewFolder, onHandoff }: { onUpload: () 
         <Plus className="size-6" /> New
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60">
-        <DropdownMenuItem onClick={onNewFolder}><FolderPlus /> New folder</DropdownMenuItem>
+        {canManage && <DropdownMenuItem onClick={onNewFolder}><FolderPlus /> New folder</DropdownMenuItem>}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onUpload}><Upload /> File upload</DropdownMenuItem>
         <DropdownMenuItem onClick={onHandoff}><Smartphone className="size-4" /> Upload from phone</DropdownMenuItem>
-        <DropdownMenuItem onClick={onAddUrl}><Link2 /> Add from link</DropdownMenuItem>
+        {canManage && <DropdownMenuItem onClick={onAddUrl}><Link2 /> Add from link</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1111,7 +1138,7 @@ function SortMenu({ sort, onChange }: { sort: AssetSort; onChange: (s: AssetSort
       <DropdownMenuTrigger
         render={<button type="button" className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm hover:bg-muted" />}
       >
-        <ArrowDownUp className="size-4" /> {SORTS.find((s) => s.value === sort)?.label} <ChevronDown className="size-3.5" />
+        <ArrowDownUp className="size-4" /> {SORTS.find((s) => s.value === sort)?.label} <ChevronDown className="size-5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         {SORTS.map((s) => (
@@ -1186,7 +1213,7 @@ function FolderTile({
         <button
           type="button"
           aria-label={`More actions for ${name}`}
-          className="rounded-full p-1.5 opacity-0 hover:bg-background/60 group-hover:opacity-100 focus:opacity-100"
+          className="rounded-full p-1.5 opacity-100 hover:bg-background/60 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
           onClick={(e) => { e.stopPropagation(); openMenuAt(e.currentTarget); }}
         >
           <MoreVertical className="size-4" />
@@ -1334,7 +1361,7 @@ function FileTable({
             <button
               type="button"
               aria-label={`More actions for ${asset.name}`}
-              className="rounded-full p-1.5 opacity-0 hover:bg-background/60 group-hover:opacity-100 focus:opacity-100"
+              className="rounded-full p-1.5 opacity-100 hover:bg-background/60 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
               onClick={(e) => { e.stopPropagation(); openMenuAt(e.currentTarget); }}
             >
               <MoreVertical className="size-4" />

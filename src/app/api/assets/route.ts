@@ -1,3 +1,4 @@
+import { libraryOwnership, ensureFolder, assertFolderActive } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { assets } from "@/lib/db/schema";
@@ -8,7 +9,7 @@ import type { AssetSort, AssetType } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
-  const access = await guard(req.headers, params.get("tenantId"));
+  const access = await guard(req.headers, params.get("tenantId"), "read", params.get("folder"));
   if ("error" in access) return access.error;
 
   const page = await queryAssets(access.tenant.id, {
@@ -17,14 +18,16 @@ export async function GET(req: NextRequest) {
     folder: params.get("folder"),
     sort: (params.get("sort") as AssetSort | null) ?? undefined,
     offset: Number(params.get("offset")) || 0,
-  });
+    trash: access.tenant.role !== "shared" && params.get("trash") === "1",
+    scopeFolder: access.tenant.role === "shared" ? params.get("folder") : undefined,
+  }, access.viewer.id);
   return NextResponse.json(page);
 }
 
 // Add a file by URL; the file stays where it is hosted
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  const access = await guard(req.headers, body?.tenantId, "write");
+  const access = await guard(req.headers, body?.tenantId, "write", normalizeFolder(body?.folder));
   if ("error" in access) return access.error;
 
   let url: URL;
@@ -35,23 +38,21 @@ export async function POST(req: NextRequest) {
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return jsonError("Only http(s) links are supported", 400);
 
-  let mimeType: string | null = null;
-  let fileSize: number | null = null;
-  try {
-    const res = await fetch(url, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) });
-    mimeType = res.headers.get("content-type")?.split(";")[0].trim() || null;
-    const length = Number(res.headers.get("content-length"));
-    fileSize = Number.isFinite(length) && length > 0 && length < 2 ** 31 ? length : null;
-  } catch {}
-  if (!mimeType || mimeType === "application/octet-stream") mimeType = guessMime(url.pathname) ?? mimeType;
+  // Linked files stay on their original host; do not perform server-side probes
+  // of a user-supplied address (including redirects to private networks).
+  const mimeType = guessMime(url.pathname);
+  const fileSize = null;
 
   const filename = decodeURIComponent(url.pathname.split("/").pop() || "") || url.hostname;
   const name = (String(body?.name ?? "").trim() || filename.replace(/\.[^.]+$/, "") || filename).slice(0, 255);
 
+  await assertFolderActive(access.tenant.id,access.viewer.id,normalizeFolder(body?.folder));
+  await ensureFolder(access.tenant.id,access.viewer.id,normalizeFolder(body?.folder));
   const [row] = await db
     .insert(assets)
     .values({
-      tenantId: access.tenant.id,
+      ...libraryOwnership(access.tenant.id, access.viewer.id),
+      uploadedById: access.viewer.id,
       name,
       url: url.toString(),
       mimeType,
