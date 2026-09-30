@@ -1,8 +1,9 @@
+import { libraryScope, assetVisibleCondition, assertFolderActive, ensureFolder } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { assets } from "@/lib/db/schema";
-import { cleanIds, guard, jsonError, removeOrphanedUploads } from "@/lib/api";
+import { cleanIds, guard, jsonError } from "@/lib/api";
 import { normalizeFolder, normalizeTags } from "@/lib/assets";
 
 // { tenantId, action: "move" | "tag" | "delete", ids, folder?, tags? }
@@ -16,9 +17,11 @@ export async function POST(req: NextRequest) {
 
   const ids = cleanIds(body?.ids);
   if (!ids.length) return NextResponse.json({ count: 0 });
-  const scope = and(eq(assets.tenantId, access.tenant.id), inArray(assets.id, ids));
+  const scope = and(libraryScope(access.tenant.id,access.viewer.id), inArray(assets.id, ids),assetVisibleCondition());
 
   if (action === "move") {
+    await assertFolderActive(access.tenant.id,access.viewer.id,normalizeFolder(body.folder));
+    await ensureFolder(access.tenant.id,access.viewer.id,normalizeFolder(body.folder));
     const moved = await db
       .update(assets)
       .set({ folder: normalizeFolder(body.folder), updatedAt: new Date() })
@@ -42,7 +45,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ count: rows.length });
   }
 
-  const deleted = await db.delete(assets).where(scope).returning({ url: assets.url, source: assets.source });
-  await removeOrphanedUploads(deleted);
+  const deleted = await db.update(assets).set({trashedAt:new Date(),trashReason:"deleted",updatedAt:new Date()}).where(scope).returning({id:assets.id});
   return NextResponse.json({ count: deleted.length });
 }

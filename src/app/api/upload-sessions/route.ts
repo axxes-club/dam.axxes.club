@@ -1,6 +1,7 @@
+import { libraryOwnership,assertFolderActive,ensureFolder,assertLibraryAccess } from "@/lib/library";
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { getViewer, tenantAccess } from "@/lib/access";
+import { getViewer } from "@/lib/access";
 import { db } from "@/lib/db";
 import { uploadSessions } from "@/lib/db/schema";
 import { baseUrlFrom, createToken, expiryFromNow, qrSvg } from "@/lib/upload-session";
@@ -15,17 +16,18 @@ export async function POST(req: Request) {
   const tenantId = body.tenantId;
   const folder = body.folder || null;
   
-  const tenant = tenantAccess(viewer, tenantId);
-  if (!tenant?.canWrite) {
+  try { await assertLibraryAccess(viewer, tenantId, "write", folder); } catch {
     return NextResponse.json({ error: "Not yours to change" }, { status: 403 });
   }
 
+  await assertFolderActive(tenantId,viewer.id,folder);
+  await ensureFolder(tenantId,viewer.id,folder);
   const token = createToken();
   const expiresAt = expiryFromNow();
 
   await db.insert(uploadSessions).values({
     token,
-    tenantId,
+    ...libraryOwnership(tenantId,viewer.id),
     folder,
     createdById: viewer.id,
     expiresAt,

@@ -3,8 +3,8 @@ import { createHmac, timingSafeEqual } from "crypto";
 // Share links are signed tokens rather than database rows: they carry the target and an
 // expiry, and can't be forged without the auth secret.
 export type SharePayload =
-  | { k: "asset"; t: string; id: string; exp: number }
-  | { k: "folder"; t: string; f: string; exp: number };
+  | { k: "asset"; t: string; u?: string; id: string; exp: number }
+  | { k: "folder"; t: string; u?: string; f: string; exp: number };
 
 function secret() {
   const base = process.env.BETTER_AUTH_SECRET;
