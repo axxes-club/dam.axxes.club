@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { assets, assetOwnershipEvents } from "@/lib/db/schema";
+import { assets, assetAppLinks, assetOwnershipEvents } from "@/lib/db/schema";
 import { guard, jsonError } from "@/lib/api";
 import {
   authorizeAsset,
@@ -23,6 +23,8 @@ export async function POST(
   } catch {
     return jsonError("Forbidden", 403);
   }
+  const [link]=await db.select({id:assetAppLinks.id}).from(assetAppLinks).where(eq(assetAppLinks.assetId,original.id)).limit(1);
+  if(original.source==='office'||link)return jsonError('Linked files must stay in their workspace. Duplicate the document in Office instead.',409);
   if (original.trashedAt)
     return jsonError("Restore the file before transferring ownership", 409);
   const folder = normalizeFolder(b.folder);

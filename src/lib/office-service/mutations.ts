@@ -61,11 +61,11 @@ export async function mutateFolder(viewer:Viewer,libraryId:string,operation:stri
  }
  if(operation==='trashFolder'){
   const result=await db.execute(sql`with root as (select id from asset_folders where ${folderScope} and path=${path}),
-   folders as (update asset_folders set trashed_at=now(),trash_reason=case when path=${path} then 'deleted' else 'folder-deleted' end where ${folderScope} and (path=${path} or left(path,${path.length+1})=${path+'/'}) and exists(select 1 from root) returning id),
+   folders as (update asset_folders set trashed_at=now(),trash_reason=case when path=${path} then 'deleted' else 'folder-deleted' end where ${folderScope} and trashed_at is null and (path=${path} or left(path,${path.length+1})=${path+'/'}) and exists(select 1 from root) returning id),
    changed as (update assets a set trashed_at=now(),trash_reason='folder-deleted',updated_at=now() where ${assetScope} and a.trashed_at is null and (a.folder=${path} or left(a.folder,${path.length+1})=${path+'/'}) and exists(select 1 from folders) returning a.id,a.trashed_at),
    docs as (update office_documents d set deleted_at=a.trashed_at,version=d.version+1,updated_at=now() from changed a join asset_app_links l on l.asset_id=a.id and l.app_key='office' where d.id=l.record_id and d.tenant_id=l.tenant_id returning d.id)
-   select id from root`)
-  if(!result.rows.length)throw new Error('Folder missing');return {ok:true}
+   select id,(select count(*) from changed) as count from root`)
+  if(!result.rows.length)throw new Error('Folder missing');return {ok:true,count:Number(result.rows[0].count)}
  }
  if(operation==='restoreFolder'){
   const result=await db.execute(sql`with root as (
@@ -79,12 +79,22 @@ export async function mutateFolder(viewer:Viewer,libraryId:string,operation:stri
  throw new Error('Unknown folder operation')
 }
 export async function linkedOffice(viewer:Viewer,libraryId:string,payload:unknown){
- const input=z.object({documentId:uuid,need:z.enum(['read','write']).default('read')}).parse(payload)
+ const input=z.object({documentId:uuid,need:z.enum(['read','write','delete']).default('read')}).parse(payload)
  await assertLibraryAccess(viewer,libraryId,input.need)
  const [link]=await db.select({assetId:assetAppLinks.assetId}).from(assetAppLinks).where(and(eq(assetAppLinks.tenantId,libraryId),eq(assetAppLinks.appKey,'office'),eq(assetAppLinks.recordId,input.documentId))).limit(1)
- if(!link)return {assetId:null}
+ if(!link){
+  const result=await db.execute(sql`select title,folder from office_documents where id=${input.documentId}::uuid and tenant_id=${libraryId}::uuid and deleted_at is null`)
+  const document=result.rows[0] as {title:string;folder:string|null}|undefined
+  if(!document)throw new Error('Document unavailable')
+  await assertLibraryAccess(viewer,libraryId,input.need,document.folder)
+  return {assetId:null,title:document.title,folder:document.folder,active:true}
+ }
  const asset=await authorizeAsset(viewer,link.assetId,input.need)
- if(!matches(asset,viewer,libraryId)||asset.trashedAt||asset.expiresAt&&asset.expiresAt<=new Date())throw new Error('File unavailable')
+ if(!matches(asset,viewer,libraryId))throw new Error('Forbidden')
+ if(input.need!=='delete'){
+  if(asset.trashedAt||asset.expiresAt&&asset.expiresAt<=new Date())throw new Error('File unavailable')
+  await assertLibraryAccess(viewer,libraryId,input.need,asset.folder)
+ }
  return {assetId:asset.id,folder:asset.folder,title:asset.name,active:true}
 }
 export async function linkOffice(viewer:Viewer,libraryId:string,payload:unknown){

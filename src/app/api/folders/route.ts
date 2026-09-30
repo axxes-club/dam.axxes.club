@@ -1,3 +1,4 @@
+import {mutateFolder} from "@/lib/office-service/mutations";
 import {
   renameFolderStatement,
   restoreFolderStatement,
@@ -151,34 +152,6 @@ export async function DELETE(req: NextRequest) {
   const path = normalizeFolder(b.name ?? b.folder);
   if (!path) return jsonError("Folder required", 400);
   await ensureFolder(a.tenant.id, a.viewer.id, path);
-  const deletedAt = new Date();
-  await db
-    .update(assetFolders)
-    .set({
-      trashedAt: deletedAt,
-      trashReason: sql`case when ${assetFolders.path}=${path} then 'deleted' else 'folder-deleted' end`,
-    })
-    .where(
-      and(
-        folderScope(a.tenant.id, a.viewer.id),
-        sql`${assetFolders.trashedAt} is null`,
-        sql`(${assetFolders.path}=${path} or left(${assetFolders.path},${path.length + 1})=${path + "/"})`,
-      ),
-    );
-  const rows = await db
-    .update(assets)
-    .set({
-      trashedAt: deletedAt,
-      trashReason: "folder-deleted",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        libraryScope(a.tenant.id, a.viewer.id),
-        sql`${assets.trashedAt} is null`,
-        sql`(${assets.folder}=${path} or left(${assets.folder},${path.length + 1})=${path + "/"})`,
-      ),
-    )
-    .returning({ id: assets.id });
-  return NextResponse.json({ count: rows.length });
+  try{const result=await mutateFolder(a.viewer,a.tenant.id,'trashFolder',{path});return NextResponse.json(result)}
+  catch{return jsonError('Folder unavailable',409)}
 }

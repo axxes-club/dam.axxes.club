@@ -1,3 +1,4 @@
+import {updateAssetMetadataStatement} from "@/lib/office-service/metadata";
 import { libraryScope, assetVisibleCondition, assertFolderActive, ensureFolder } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
@@ -22,12 +23,8 @@ export async function POST(req: NextRequest) {
   if (action === "move") {
     await assertFolderActive(access.tenant.id,access.viewer.id,normalizeFolder(body.folder));
     await ensureFolder(access.tenant.id,access.viewer.id,normalizeFolder(body.folder));
-    const moved = await db
-      .update(assets)
-      .set({ folder: normalizeFolder(body.folder), updatedAt: new Date() })
-      .where(scope)
-      .returning({ id: assets.id });
-    return NextResponse.json({ count: moved.length });
+    const moved=await db.execute(updateAssetMetadataStatement(scope!,{folder:normalizeFolder(body.folder),updatedAt:new Date()}));
+    return NextResponse.json({ count: moved.rows.length });
   }
 
   if (action === "tag") {
@@ -45,6 +42,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ count: rows.length });
   }
 
-  const deleted = await db.update(assets).set({trashedAt:new Date(),trashReason:"deleted",updatedAt:new Date()}).where(scope).returning({id:assets.id});
-  return NextResponse.json({ count: deleted.length });
+  const deleted=await db.execute(updateAssetMetadataStatement(scope!,{trashedAt:new Date(),trashReason:'deleted',updatedAt:new Date()}));
+  return NextResponse.json({ count: deleted.rows.length });
 }

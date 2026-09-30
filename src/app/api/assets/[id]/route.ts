@@ -1,3 +1,4 @@
+import {updateAssetMetadataStatement,deleteAssetStatement} from "@/lib/office-service/metadata";
 import {
   assertFolderActive,
   ensureFolder,
@@ -90,12 +91,10 @@ export async function PATCH(
     updates.trashedAt = null;
     updates.trashReason = null;
   }
-  const [row] = await db
-    .update(assets)
-    .set({ ...updates, updatedAt: new Date() })
-    .where(and(eq(assets.id, params.id), libraryScope(libraryId, result.viewer.id)))
-    .returning();
-  if (!row) return jsonError("Ownership changed; refresh and retry", 409);
+  const changed=await db.execute(updateAssetMetadataStatement(and(eq(assets.id,params.id),libraryScope(libraryId,result.viewer.id))!,{...updates,updatedAt:new Date()}));
+  if(!changed.rows.length)return jsonError("Ownership changed; refresh and retry",409);
+  const [row]=await db.select().from(assets).where(and(eq(assets.id,params.id),libraryScope(libraryId,result.viewer.id)));
+  if(!row)return jsonError("Ownership changed; refresh and retry",409);
   return NextResponse.json(toAsset(row));
 }
 
@@ -107,14 +106,7 @@ export async function DELETE(
   if ("error" in result) return result.error;
 
   if (req.nextUrl.searchParams.get("permanent") !== "1") {
-    await db
-      .update(assets)
-      .set({
-        trashedAt: new Date(),
-        trashReason: "deleted",
-        updatedAt: new Date(),
-      })
-      .where(and(eq(assets.id, params.id), libraryScope(result.row.tenantId ?? "personal", result.viewer.id)));
+    await db.execute(updateAssetMetadataStatement(and(eq(assets.id,params.id),libraryScope(result.row.tenantId??'personal',result.viewer.id))!,{trashedAt:new Date(),trashReason:'deleted',updatedAt:new Date()}));
     return NextResponse.json({ ok: true });
   }
   if (!result.row.trashedAt) {
@@ -122,10 +114,8 @@ export async function DELETE(
     if (active) return jsonError("Move the file to Trash first", 409);
   }
   if (result.row.source === "upload" && result.row.storageKey) await enqueueStorageCleanup([result.row.storageKey]);
-  const deleted = await db
-    .delete(assets)
-    .where(and(eq(assets.id, params.id), libraryScope(result.row.tenantId ?? "personal", result.viewer.id), sql`(${assets.trashedAt} is not null or not (${assetVisibleCondition()}))`))
-    .returning({ url: assets.url, source: assets.source });
+  const deletion=await db.execute(deleteAssetStatement(and(eq(assets.id,params.id),libraryScope(result.row.tenantId??'personal',result.viewer.id),sql`(${assets.trashedAt} is not null or not (${assetVisibleCondition()}))`)!));
+  const deleted=deletion.rows as {url:string;source:string}[];
   await removeOrphanedUploads(deleted);
   if (!deleted.length) return jsonError("File state changed; refresh and retry", 409);
   return NextResponse.json({ ok: true });

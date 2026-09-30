@@ -10,7 +10,7 @@ const dialect = new PgDialect();
 async function fixture() {
   const db = new PGlite();
   await db.exec(
-    `create table asset_folders(id text primary key,tenant_id text,owner_user_id text,path text not null,expires_at timestamptz,trashed_at timestamptz,trash_reason text, unique(tenant_id,path)); create table assets(id text primary key,tenant_id text,owner_user_id text,folder text,expires_at timestamptz,trashed_at timestamptz,trash_reason text,updated_at timestamptz); insert into asset_folders(id,tenant_id,path) values('root','t','From'),('child','t','From/Child'),('target','t','To');insert into assets(id,tenant_id,folder)values('file','t','From/Child');`,
+    `create table asset_folders(id text primary key,tenant_id text,owner_user_id text,path text not null,expires_at timestamptz,trashed_at timestamptz,trash_reason text, unique(tenant_id,path)); create table assets(id text primary key,tenant_id text,owner_user_id text,folder text,expires_at timestamptz,trashed_at timestamptz,trash_reason text,updated_at timestamptz); create table office_documents(id text primary key,tenant_id text,folder text,deleted_at timestamptz,version integer default 1,updated_at timestamptz); create table asset_app_links(asset_id text,record_id text,tenant_id text,app_key text);insert into office_documents(id,tenant_id,folder)values('doc','t','From/Child');insert into asset_app_links values('file','doc','t','office');insert into asset_folders(id,tenant_id,path) values('root','t','From'),('child','t','From/Child'),('target','t','To');insert into assets(id,tenant_id,folder)values('file','t','From/Child');`,
   );
   return db;
 }
@@ -60,6 +60,7 @@ test("successful rename moves root, descendants and assets in one statement", as
       .folder,
     "To/Child",
   );
+  assert.equal((await db.query<{folder:string}>("select folder from office_documents where id='doc'")).rows[0].folder,'To/Child');
   await db.close();
 });
 test("restore clears applicable subtree trash and preserves individual deletions", async () => {

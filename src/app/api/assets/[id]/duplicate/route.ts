@@ -15,6 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if(!original.tenantId&&original.ownerUserId!==access.viewer.id)return jsonError("Forbidden",403);
   if(original.trashedAt||(original.expiresAt&&original.expiresAt<=new Date()))return jsonError("File unavailable",409);
   await assertFolderActive(access.tenant.id,access.viewer.id,original.folder);
+  if(original.source==='office')return jsonError('Duplicate this document in Office to copy its content.',409);
   const copy: typeof assets.$inferInsert = { ...original, name: `${original.name} (copy)`.slice(0, 255) };
   delete copy.id;
   copy.uploadKey=null;

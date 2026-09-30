@@ -35,7 +35,11 @@ export function renameFolderStatement(
  ), files as (
    update assets a set folder=${to}||substring(a.folder from ${from.length + 1}::integer),updated_at=now()
    where ${ownerScope("a", tenantId, userId)} and ${subtree("a", "folder", from)} and exists(select 1 from moved)
-   returning id
+   returning id,folder
+ ), docs as (
+   update office_documents d set folder=a.folder,version=d.version+1,updated_at=now()
+   from files a join asset_app_links l on l.asset_id=a.id and l.app_key='office'
+   where d.id=l.record_id and d.tenant_id=l.tenant_id returning d.id
  ) select id from permitted
  `;
 }
@@ -73,6 +77,10 @@ export function restoreFolderStatement(
        and (blocked.expires_at<=${now.toISOString()}::timestamptz or (blocked.trashed_at is not null
          and not (blocked.trash_reason in ('folder-deleted','expired') and blocked.trashed_at=(select trashed_at from root)))))
    returning id
+ ), docs as (
+   update office_documents d set deleted_at=null,version=d.version+1,updated_at=now()
+   from files a join asset_app_links l on l.asset_id=a.id and l.app_key='office'
+   where d.id=l.record_id and d.tenant_id=l.tenant_id returning d.id
  ) select id from root
  `;
 }
