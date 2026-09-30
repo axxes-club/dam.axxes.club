@@ -28,3 +28,15 @@ Required env (`.env.local`): `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_
 npm install
 npm run dev
 ```
+
+### Office service
+
+`POST /api/internal/office` accepts short-lived HMAC-signed requests from Office.
+Set `FOLDERS_SERVICE_SECRET` to the same random secret of at least 32 characters
+in both deployments. Office uses `FOLDERS_SERVICE_URL=https://folders.axxes.club`;
+keep this credential server-only. Apply the Members `0005_office_folders_service`
+migration first. Each request reloads current permissions; mutation replay records
+persist in the database. `OFFICE_PUBLIC_URL=https://axxes.work` controls native
+Office links. `FOLDERS_PUBLIC_URL` controls the provider upload callback origin.
+Uploads also require the existing `UPLOADTHING_TOKEN`; upload grants do not
+contain that credential.

@@ -18,11 +18,17 @@ export async function getViewer(headers: Headers): Promise<Viewer | null> {
   const session = await auth.api.getSession({ headers });
   if (!session) return null;
 
+  return getViewerById(session.user.id);
+}
+
+/** Internal services call this only after authenticating their signed request. */
+export async function getViewerById(userId: string): Promise<Viewer | null> {
   const [row] = await db
-    .select({ isSuperadmin: user.isSuperadmin, image: user.image })
+    .select({ id:user.id,name:user.name,email:user.email,isSuperadmin: user.isSuperadmin, image: user.image })
     .from(user)
-    .where(eq(user.id, session.user.id));
-  const isSuperadmin = row?.isSuperadmin ?? false;
+    .where(eq(user.id, userId));
+  if (!row) return null;
+  const isSuperadmin = row.isSuperadmin;
 
   let tenantList: TenantAccess[];
   if (isSuperadmin) {
@@ -56,7 +62,7 @@ export async function getViewer(headers: Headers): Promise<Viewer | null> {
       .innerJoin(tenants, eq(tenants.id, tenantMemberships.tenantId))
       .where(
         and(
-          eq(tenantMemberships.userId, session.user.id),
+          eq(tenantMemberships.userId, userId),
           isNull(tenantMemberships.deletedAt),
           isNull(tenants.deletedAt),
           eq(tenants.status, "active"),
@@ -75,9 +81,9 @@ export async function getViewer(headers: Headers): Promise<Viewer | null> {
   }
 
   return {
-    id: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
+    id: row.id,
+    name: row.name,
+    email: row.email,
     image: row?.image ?? null,
     isSuperadmin,
     tenants: [

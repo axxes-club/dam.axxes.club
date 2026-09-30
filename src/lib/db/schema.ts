@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, index, uuid, integer, jsonb } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, boolean, index, uuid, integer, jsonb, bigint, primaryKey, uniqueIndex } from "drizzle-orm/pg-core"
 
 // Better Auth User table
 export const user = pgTable("user", {
@@ -180,3 +180,10 @@ export const assetOwnershipEvents = pgTable("asset_ownership_events", {
 export const folderStorageCleanup = pgTable("folder_storage_cleanup", {
  storageKey:text("storage_key").primaryKey(),attempts:integer("attempts").notNull().default(0),lastError:text("last_error"),nextAttemptAt:timestamp("next_attempt_at",{withTimezone:true}).notNull().defaultNow(),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp("updated_at",{withTimezone:true}).notNull().defaultNow()
 });
+
+export const officeServiceRequests = pgTable("office_service_requests", {
+ caller:text("caller").notNull(),requestId:text("request_id").notNull(),expiresAt:timestamp("expires_at",{withTimezone:true}).notNull(),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),
+}, t=>[primaryKey({columns:[t.caller,t.requestId]})]);
+export const officeUploads = pgTable("office_uploads", {
+ id:uuid("id").primaryKey().defaultRandom(),requestId:text("request_id").notNull(),userId:text("user_id").notNull(),libraryId:text("library_id").notNull(),folder:text("folder"),name:text("name").notNull(),mimeType:text("mime_type").notNull(),size:bigint("size",{mode:"number"}).notNull(),storageKey:text("storage_key").unique(),assetId:uuid("asset_id"),expiresAt:timestamp("expires_at",{withTimezone:true}).notNull(),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),
+},t=>[uniqueIndex("office_uploads_user_request_idx").on(t.userId,t.requestId)]);
