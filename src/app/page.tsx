@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { FoldersApp } from "@/components/folders/app";
 import { getViewer } from "@/lib/access";
@@ -12,5 +12,6 @@ export default async function Home() {
   // Folders in that customer's brand; anyone spanning several sees standard AXXES.
   const only = viewer.tenants.length === 1 ? viewer.tenants[0] : null;
   const brand = only && only.role !== "superadmin" ? await getCustomerBrand(only.id) : null;
-  return <FoldersApp viewer={viewer} handshakeUrl={HANDSHAKE_URL} brand={brand} />;
+  const initialTenantId = cookies().get("folders_tenant_id")?.value;
+  return <FoldersApp initialTenantId={initialTenantId} viewer={viewer} handshakeUrl={HANDSHAKE_URL} brand={brand} />;
 }

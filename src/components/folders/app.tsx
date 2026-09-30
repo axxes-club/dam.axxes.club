@@ -1,5 +1,6 @@
 "use client";
 
+import { AllAppsSwitcher } from "@/components/all-apps-switcher";
 import type { CustomerBrand } from "@/lib/white-label";
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -139,7 +140,7 @@ function openMenuAt(el: HTMLElement) {
 const BrandContext = React.createContext<CustomerBrand | null>(null);
 
 /** Folders, in a white-label customer's own brand when there is one. */
-export function FoldersApp({ brand = null, ...props }: { viewer: Viewer; handshakeUrl: string | null; brand?: CustomerBrand | null }) {
+export function FoldersApp({ brand = null, ...props }: { viewer: Viewer; initialTenantId?: string; handshakeUrl: string | null; brand?: CustomerBrand | null }) {
   return (
     <BrandContext.Provider value={brand}>
       <div style={brand?.accent ? ({ display: "contents", "--primary": brand.accent } as React.CSSProperties) : { display: "contents" }}>
@@ -149,20 +150,23 @@ export function FoldersApp({ brand = null, ...props }: { viewer: Viewer; handsha
   );
 }
 
-function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUrl: string | null }) {
+function FoldersAppInner({ viewer, handshakeUrl, initialTenantId }: { viewer: Viewer; handshakeUrl: string | null; initialTenantId?: string }) {
   const router = useRouter();
 
   // ── Workspace ──
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
-  const [tenantId, setTenantId] = React.useState<string | null>(viewer.tenants[0]?.id ?? null);
+  const [tenantId, setTenantId] = React.useState<string | null>(viewer.tenants.find(t => t.id === initialTenantId)?.id ?? viewer.tenants[0]?.id ?? null);
   React.useEffect(() => {
     try {
       const stored = localStorage.getItem(TENANT_KEY);
-      if (stored && viewer.tenants.some((t) => t.id === stored)) setTenantId(stored);
+      if (initialTenantId && viewer.tenants.some(t => t.id === initialTenantId)) {
+        setTenantId(initialTenantId);
+        localStorage.setItem(TENANT_KEY, initialTenantId);
+      } else if (stored && viewer.tenants.some((t) => t.id === stored)) setTenantId(stored);
       const layout = localStorage.getItem(LAYOUT_KEY);
       if (layout === "grid" || layout === "list") setLayout(layout);
     } catch {}
-  }, [viewer.tenants]);
+  }, [viewer.tenants, initialTenantId]);
   const tenant = viewer.tenants.find((t) => t.id === tenantId) ?? null;
   const canWrite = !!tenant?.canWrite;
   const canDelete = !!tenant?.canDelete;
@@ -305,9 +309,16 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
     setAnchorId(null);
   };
 
-  const switchTenant = (id: string) => {
+  const switchTenant = async (id: string) => {
     if (!viewer.tenants.some(t => t.id === id)) {
       setLoadError("Could not switch organization. Access is unavailable.");
+      return;
+    }
+    try {
+      const response = await fetch("/api/organization/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      if (!response.ok) throw new Error("Could not switch organization. Access is unavailable.");
+    } catch {
+      setLoadError("Could not switch organization. Please try again.");
       return;
     }
     setTenantId(id);
@@ -653,6 +664,7 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
             <p className="px-4 py-1 text-xs text-muted-foreground">No folders yet</p>
           )}
         </nav>
+        <AllAppsSwitcher tenantId={tenant.id} compact={sidebarCollapsed} />
         <OrganizationMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} switchTenant={switchTenant} collapsed={sidebarCollapsed} />
         <div className={cn("mt-2 px-4 text-xs text-muted-foreground", sidebarCollapsed && "hidden")}>
           <div className="flex items-center gap-2">
@@ -683,6 +695,7 @@ function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUr
             )}
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <div className="md:hidden"><AllAppsSwitcher tenantId={tenant.id} compact /></div>
             <div className="md:hidden"><OrganizationMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} switchTenant={switchTenant} collapsed /></div>
             <AccountMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} role={tenant.role} onSignOut={signOut} switchTenant={switchTenant} accountUrl={handshakeUrl} />
           </div>
