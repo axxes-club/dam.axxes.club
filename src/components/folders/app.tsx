@@ -1,5 +1,6 @@
 "use client";
 
+import type { CustomerBrand } from "@/lib/white-label";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -133,7 +134,20 @@ function openMenuAt(el: HTMLElement) {
   el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: rect.left, clientY: rect.bottom }));
 }
 
-export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUrl: string | null }) {
+const BrandContext = React.createContext<CustomerBrand | null>(null);
+
+/** Folders, in a white-label customer's own brand when there is one. */
+export function FoldersApp({ brand = null, ...props }: { viewer: Viewer; handshakeUrl: string | null; brand?: CustomerBrand | null }) {
+  return (
+    <BrandContext.Provider value={brand}>
+      <div style={brand?.accent ? ({ display: "contents", "--primary": brand.accent } as React.CSSProperties) : { display: "contents" }}>
+        <FoldersAppInner {...props} />
+      </div>
+    </BrandContext.Provider>
+  );
+}
+
+function FoldersAppInner({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUrl: string | null }) {
   const router = useRouter();
 
   // ── Workspace ──
@@ -977,6 +991,26 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
 // ── Pieces ───────────────────────────────────────────────────────────────
 
 function Logo({ className, compact }: { className?: string; compact?: boolean }) {
+  const brand = React.useContext(BrandContext);
+  if (brand) {
+    const src = brand.iconUrl ?? brand.logoUrl;
+    return (
+      <div className={cn("flex items-center gap-2.5", className)}>
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" className="size-9 rounded-md bg-white object-contain" />
+        ) : (
+          <Folder className="size-9 fill-folder text-folder-tab" strokeWidth={1.5} />
+        )}
+        {!compact && (
+          <span className="leading-tight">
+            <span className="block text-[22px] tracking-tight text-foreground/80">Folders</span>
+            <span className="block text-xs text-muted-foreground">{brand.name} · Powered by AXXES</span>
+          </span>
+        )}
+      </div>
+    );
+  }
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
       <div className="relative size-9">
