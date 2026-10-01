@@ -74,13 +74,16 @@ export function compileRouter(router, visibility) {
               req: request,
               input: validated,
             });
-            const owner = principalOwner(raw);
-            const metadata = Object.fromEntries(
-              Object.entries(raw).filter(
-                ([key]) => !["token", "tokenStr", "ticket"].includes(key),
+            const metadata = JSON.parse(
+              JSON.stringify(
+                Object.fromEntries(
+                  Object.entries(raw).filter(
+                    ([key]) => !["token", "tokenStr", "ticket"].includes(key),
+                  ),
+                ),
               ),
             );
-            return { owner, metadata };
+            return { owner: principalOwner(metadata), metadata };
           },
           complete: (args) => builder.completeHook(args),
         },
