@@ -15,7 +15,7 @@ export async function readStorage(client,key,now=new Date()) {
  await ensureAccount(client,key);
  const {rows:[row]}=await client.query(`SELECT a.base_bytes::text,a.used_bytes::text,a.reserved_bytes::text,
  COALESCE((SELECT sum(e.bytes) FROM storage_entitlements e WHERE e.tenant_id=a.tenant_id AND e.user_id=a.user_id AND e.status='active' AND e.starts_at<=$3 AND e.ends_at>$3),0)::text AS paid_bytes,
- COALESCE((SELECT sum(c.bytes) FROM storage_object_charges c WHERE c.tenant_id=a.tenant_id AND c.user_id IS NULL AND c.released_at IS NULL),0)::text AS legacy_bytes
+ COALESCE((SELECT sum(c.bytes) FROM storage_legacy_usage c WHERE c.tenant_id=a.tenant_id),0)::text AS legacy_bytes
  FROM storage_accounts a WHERE a.tenant_id=$1 AND a.user_id=$2`,[key.tenantId,key.userId,now]);
  const effective=BigInt(row.base_bytes)+BigInt(row.paid_bytes),remaining=effective-BigInt(row.used_bytes)-BigInt(row.reserved_bytes);
  return {baseBytes:row.base_bytes,paidBytes:row.paid_bytes,usedBytes:row.used_bytes,reservedBytes:row.reserved_bytes,effectiveBytes:effective.toString(),remainingBytes:(remaining>0n?remaining:0n).toString(),legacyBytes:row.legacy_bytes};
@@ -67,4 +67,27 @@ export async function commitCharge(client,{uploadId,assetId,objectKey,generation
  await client.query('INSERT INTO storage_asset_links(asset_id,object_key,generation) VALUES($1,$2,$3)',[assetId,objectKey,generation]);
  await client.query("UPDATE storage_reservations SET state='complete' WHERE upload_id=$1",[uploadId]);
  await client.query('UPDATE storage_accounts SET reserved_bytes=reserved_bytes-$3,used_bytes=used_bytes+$3,updated_at=now() WHERE tenant_id=$1 AND user_id=$2',[key.tenantId,key.userId,actualBytes]);
+}
+export async function lockedCharge(client,{objectKey,generation}) {
+ const {rows:[initial]}=await client.query('SELECT * FROM storage_object_charges WHERE object_key=$1 AND generation=$2',[objectKey,generation]);
+ if(!initial)return null;
+ if(initial.user_id)await lockAccount(client,{tenantId:initial.tenant_id,userId:initial.user_id});
+ const {rows:[row]}=await client.query('SELECT *,bytes::text FROM storage_object_charges WHERE object_key=$1 AND generation=$2 FOR UPDATE',[objectKey,generation]);return row;
+}
+export async function objectRetained(client,{objectKey,generation}) {
+ const {rows:[r]}=await client.query('SELECT EXISTS(SELECT 1 FROM storage_asset_links l JOIN assets a ON a.id=l.asset_id WHERE l.object_key=$1 AND l.generation=$2) AS retained',[objectKey,generation]);return r.retained;
+}
+export async function releaseObjectCharge(client,input) {
+ const row=await lockedCharge(client,input);
+ if(!row||row.released_at||await objectRetained(client,input))return false;
+ await client.query('DELETE FROM storage_asset_links WHERE object_key=$1 AND generation=$2',[input.objectKey,input.generation]);
+ await client.query('UPDATE storage_object_charges SET released_at=now() WHERE object_key=$1 AND generation=$2',[input.objectKey,input.generation]);
+ if(row.user_id)await client.query('UPDATE storage_accounts SET used_bytes=used_bytes-$3,updated_at=now() WHERE tenant_id=$1 AND user_id=$2',[row.tenant_id,row.user_id,row.bytes]);return true;
+}
+export async function deleteChargedObject(pool,input,remove) {
+ const client=await pool.connect();
+ try{await client.query('BEGIN');const charge=await lockedCharge(client,input);
+  if(!charge||charge.released_at||await objectRetained(client,input)){await client.query('COMMIT');return false;}
+  await remove();const released=await releaseObjectCharge(client,input);await client.query('COMMIT');return released;
+ }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }

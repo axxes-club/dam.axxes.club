@@ -1,3 +1,4 @@
+import {deleteChargedObject} from "../storage/quota.mjs";
 import { shareProxyUrl } from "./share-url.mjs";
 import { db } from "@/lib/db";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
@@ -143,7 +144,32 @@ export async function deleteStoredUrls(urls: string[]) {
   for (const url of urls) {
     const key = await keyForUrl(url);
     if (!key || key.startsWith("imports/")) continue;
-    if (await adapter.remove(null, key, async () => true)) deleted++;
+    const pool=storagePool();
+    let charge: {generation:string} | undefined;
+    try {charge=(await pool.query("SELECT generation FROM storage_object_charges WHERE object_key=$1 ORDER BY created_at DESC LIMIT 1",[key])).rows[0];}
+    catch(error) {if((error as {code?:string}).code!=="42703" || (process.env.STORAGE_QUOTA_MODE && process.env.STORAGE_QUOTA_MODE!=="off"))throw error;}
+    if(charge) {
+      // Each service can delete only its own prefix; the owning service's GC handles cross-app removals.
+      if(!key.startsWith("uploads/dam/"))continue;
+      if(await removeChargedFile(key,charge.generation))deleted++;
+    } else if (await adapter.remove(null, key, async () => true)) deleted++;
   }
   return deleted;
+}
+
+async function removeChargedFile(key:string,generation:string) {
+ const adapter=storageAdapter();
+ return deleteChargedObject(storagePool(),{objectKey:key,generation},async()=>{
+  const file=await adapter.store.stat(key);
+  if(!file)return; // Durable owned charge proves the previously removed generation.
+  if(String(file.generation)!==generation)throw new StorageError("Stored generation changed",409);
+  await adapter.store.delete(key,generation);
+ });
+}
+export async function cleanupUnreferencedStorage() {
+ const {rows}=await storagePool().query(`SELECT c.object_key,c.generation FROM storage_object_charges c
+ WHERE c.object_key LIKE $1 AND c.released_at IS NULL
+ AND NOT EXISTS(SELECT 1 FROM storage_asset_links l JOIN assets a ON a.id=l.asset_id WHERE l.object_key=c.object_key AND l.generation=c.generation) LIMIT 50`,["uploads/dam/%"]);
+ let removed=0;for(const row of rows)if(await removeChargedFile(row.object_key,row.generation))removed++;
+ return removed;
 }
