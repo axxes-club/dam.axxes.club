@@ -27,7 +27,7 @@ export async function getViewer(headers: Headers): Promise<Viewer | null> {
     const all = await db
       .select({ id: tenants.id, name: tenants.name, settings: tenants.settings })
       .from(tenants)
-      .where(isNull(tenants.deletedAt))
+      .where(and(isNull(tenants.deletedAt), eq(tenants.status, "active")))
       .orderBy(asc(tenants.name));
     tenantList = all.filter((t) => foldersEnabled(t.settings)).map((t) => ({ id: t.id, name: t.name, role: "superadmin", canWrite: true, canDelete: true }));
   } else {
@@ -39,7 +39,8 @@ export async function getViewer(headers: Headers): Promise<Viewer | null> {
         and(
           eq(tenantMemberships.userId, session.user.id),
           isNull(tenantMemberships.deletedAt),
-          isNull(tenants.deletedAt)
+          isNull(tenants.deletedAt),
+          eq(tenants.status, "active")
         )
       )
       .orderBy(asc(tenants.name));

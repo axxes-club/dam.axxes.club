@@ -1,5 +1,7 @@
 "use client";
 
+import { AllAppsSwitcher } from "@/components/all-apps-switcher";
+import type { CustomerBrand } from "@/lib/white-label";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -34,6 +36,8 @@ import {
   Loader2,
   LogOut,
   MoreVertical,
+  PanelLeft,
+  Building2,
   Pencil,
   Plus,
   RefreshCw,
@@ -133,19 +137,36 @@ function openMenuAt(el: HTMLElement) {
   el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: rect.left, clientY: rect.bottom }));
 }
 
-export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshakeUrl: string | null }) {
+const BrandContext = React.createContext<CustomerBrand | null>(null);
+
+/** Folders, in a white-label customer's own brand when there is one. */
+export function FoldersApp({ brand = null, ...props }: { viewer: Viewer; initialTenantId?: string; handshakeUrl: string | null; brand?: CustomerBrand | null }) {
+  return (
+    <BrandContext.Provider value={brand}>
+      <div style={brand?.accent ? ({ display: "contents", "--primary": brand.accent } as React.CSSProperties) : { display: "contents" }}>
+        <FoldersAppInner {...props} />
+      </div>
+    </BrandContext.Provider>
+  );
+}
+
+function FoldersAppInner({ viewer, handshakeUrl, initialTenantId }: { viewer: Viewer; handshakeUrl: string | null; initialTenantId?: string }) {
   const router = useRouter();
 
   // ── Workspace ──
-  const [tenantId, setTenantId] = React.useState<string | null>(viewer.tenants[0]?.id ?? null);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const [tenantId, setTenantId] = React.useState<string | null>(viewer.tenants.find(t => t.id === initialTenantId)?.id ?? viewer.tenants[0]?.id ?? null);
   React.useEffect(() => {
     try {
       const stored = localStorage.getItem(TENANT_KEY);
-      if (stored && viewer.tenants.some((t) => t.id === stored)) setTenantId(stored);
+      if (initialTenantId && viewer.tenants.some(t => t.id === initialTenantId)) {
+        setTenantId(initialTenantId);
+        localStorage.setItem(TENANT_KEY, initialTenantId);
+      } else if (stored && viewer.tenants.some((t) => t.id === stored)) setTenantId(stored);
       const layout = localStorage.getItem(LAYOUT_KEY);
       if (layout === "grid" || layout === "list") setLayout(layout);
     } catch {}
-  }, [viewer.tenants]);
+  }, [viewer.tenants, initialTenantId]);
   const tenant = viewer.tenants.find((t) => t.id === tenantId) ?? null;
   const canWrite = !!tenant?.canWrite;
   const canDelete = !!tenant?.canDelete;
@@ -288,7 +309,18 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
     setAnchorId(null);
   };
 
-  const switchTenant = (id: string) => {
+  const switchTenant = async (id: string) => {
+    if (!viewer.tenants.some(t => t.id === id)) {
+      setLoadError("Could not switch organization. Access is unavailable.");
+      return;
+    }
+    try {
+      const response = await fetch("/api/organization/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      if (!response.ok) throw new Error("Could not switch organization. Access is unavailable.");
+    } catch {
+      setLoadError("Could not switch organization. Please try again.");
+      return;
+    }
     setTenantId(id);
     setDraftFolders([]);
     go({ kind: "home" });
@@ -578,11 +610,12 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
   return (
     <div className="flex h-dvh bg-sidebar text-foreground">
       {/* ── Sidebar ── */}
-      <aside className="hidden w-64 shrink-0 flex-col px-3 pb-3 md:flex" aria-label="Navigation">
-        <div className="flex h-16 items-center px-3">
-          <Logo />
+      <aside data-collapsed={sidebarCollapsed} className={cn("group/sidebar hidden shrink-0 flex-col px-3 pb-3 transition-[width] md:flex", sidebarCollapsed ? "w-16" : "w-64")} aria-label="Navigation">
+        <div className={cn("flex h-16 items-center", sidebarCollapsed ? "justify-center" : "px-3")}>
+          <div className={cn(sidebarCollapsed && "hidden")}><Logo /></div>
+          <button type="button" aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed(x => !x)} className={cn("rounded-full p-1 hover:bg-muted", !sidebarCollapsed && "ml-auto")}><PanelLeft className="size-4" /></button>
         </div>
-        {canWrite && (
+        {canWrite && !sidebarCollapsed && (
           <NewMenu
             onUpload={() => fileInputRef.current?.click()}
             onAddUrl={() => setDialog({ kind: "add-url", folder: currentFolder })}
@@ -606,12 +639,12 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
 
           <button
             type="button"
-            className="mt-4 flex w-full items-center gap-1 px-4 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0 mt-4 flex w-full items-center gap-1 px-4 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
             onClick={() => setFoldersExpanded((x) => !x)}
             aria-expanded={foldersExpanded}
           >
             <ChevronRight className={cn("size-3.5 transition-transform", foldersExpanded && "rotate-90")} />
-            Folders
+            <span className="group-data-[collapsed=true]/sidebar:hidden">Folders</span>
           </button>
           {foldersExpanded &&
             folderNames.map((name) => (
@@ -631,7 +664,9 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
             <p className="px-4 py-1 text-xs text-muted-foreground">No folders yet</p>
           )}
         </nav>
-        <div className="mt-2 px-4 text-xs text-muted-foreground">
+        <AllAppsSwitcher tenantId={tenant.id} compact={sidebarCollapsed} />
+        <OrganizationMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} switchTenant={switchTenant} collapsed={sidebarCollapsed} />
+        <div className={cn("mt-2 px-4 text-xs text-muted-foreground", sidebarCollapsed && "hidden")}>
           <div className="flex items-center gap-2">
             <HardDrive className="size-4" />
             <span>{overview ? `${formatBytes(storage)} in ${plural(overview.counts.all, "file")}` : "…"}</span>
@@ -660,7 +695,9 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
             )}
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <AccountMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} role={tenant.role} onSignOut={signOut} switchTenant={switchTenant} accountUrl={handshakeUrl} />
+            <div className="md:hidden"><AllAppsSwitcher tenantId={tenant.id} compact /></div>
+            <div className="md:hidden"><OrganizationMenu viewer={viewer} tenantId={tenant.id} tenantName={tenant.name} switchTenant={switchTenant} collapsed /></div>
+            <AccountMenu viewer={viewer} tenantName={tenant.name} role={tenant.role} onSignOut={signOut} accountUrl={handshakeUrl} />
           </div>
         </header>
 
@@ -977,6 +1014,26 @@ export function FoldersApp({ viewer, handshakeUrl }: { viewer: Viewer; handshake
 // ── Pieces ───────────────────────────────────────────────────────────────
 
 function Logo({ className, compact }: { className?: string; compact?: boolean }) {
+  const brand = React.useContext(BrandContext);
+  if (brand) {
+    const src = brand.iconUrl ?? brand.logoUrl;
+    return (
+      <div className={cn("flex items-center gap-2.5", className)}>
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" className="size-9 rounded-md bg-white object-contain" />
+        ) : (
+          <Folder className="size-9 fill-folder text-folder-tab" strokeWidth={1.5} />
+        )}
+        {!compact && (
+          <span className="leading-tight">
+            <span className="block text-[22px] tracking-tight text-foreground/80">Folders</span>
+            <span className="block text-xs text-muted-foreground">{brand.name} · Powered by AXXES</span>
+          </span>
+        )}
+      </div>
+    );
+  }
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
       <div className="relative size-9">
@@ -1040,21 +1097,22 @@ function NavItem({
     <button
       type="button"
       onClick={onClick}
+      title={label}
       className={cn(
-        "flex h-9 w-full items-center gap-4 rounded-full px-4 text-left transition-colors hover:bg-muted",
+        "group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-0 flex h-9 w-full items-center gap-4 rounded-full px-4 text-left transition-colors hover:bg-muted",
         active && "bg-accent font-medium text-accent-foreground hover:bg-accent",
         dropActive && "bg-primary text-primary-foreground hover:bg-primary"
       )}
       {...drop}
     >
       <Icon className={cn("size-[18px] shrink-0", !dropActive && iconClassName)} />
-      <span className="flex-1 truncate">{label}</span>
-      {count !== undefined && count > 0 && <span className="text-xs tabular-nums text-muted-foreground">{count.toLocaleString()}</span>}
+      <span className="flex-1 truncate group-data-[collapsed=true]/sidebar:hidden">{label}</span>
+      {count !== undefined && count > 0 && <span className="text-xs tabular-nums text-muted-foreground group-data-[collapsed=true]/sidebar:hidden">{count.toLocaleString()}</span>}
     </button>
   );
 }
 
-function AccountMenu({ viewer, tenantId, tenantName, role, onSignOut, switchTenant, accountUrl }: { viewer: Viewer; tenantId: string; tenantName: string; role: string; onSignOut: () => void; switchTenant: (id: string) => void; accountUrl: string | null }) {
+function AccountMenu({ viewer, tenantName, role, onSignOut, accountUrl }: { viewer: Viewer; tenantName: string; role: string; onSignOut: () => void; accountUrl: string | null }) {
   const initials = (viewer.name || viewer.email).split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   return (
     <DropdownMenu>
@@ -1076,18 +1134,6 @@ function AccountMenu({ viewer, tenantId, tenantName, role, onSignOut, switchTena
             {tenantName} · <span className="capitalize">{role}</span>
           </p>
         </div>
-        {viewer.tenants.length > 1 && (
-          <>
-            <DropdownMenuSeparator />
-            <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Organizations</div>
-            {viewer.tenants.map(t => (
-              <DropdownMenuItem key={t.id} onClick={() => switchTenant(t.id)}>
-                {t.id === tenantId ? <Check className="mr-2 h-4 w-4" /> : <div className="mr-2 h-4 w-4" />}
-                {t.name}
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => window.open(PORTAL_URL, "_blank", "noopener,noreferrer")}>
           <ExternalLink /> Open in members portal
@@ -1494,4 +1540,16 @@ function Empty({ icon: Icon, title, body, children }: { icon: React.ElementType;
       {children && <div className="mt-3" onClick={(e) => e.stopPropagation()}>{children}</div>}
     </div>
   );
+}
+
+function OrganizationMenu({ viewer, tenantId, tenantName, switchTenant, collapsed }: { viewer: Viewer; tenantId: string; tenantName: string; switchTenant: (id: string) => void; collapsed: boolean }) {
+  return <DropdownMenu>
+    <DropdownMenuTrigger render={<button type="button" aria-label={`Switch organization (${tenantName})`} className="mt-3 flex w-full items-center gap-2 rounded-full p-2 text-sm hover:bg-muted" />}>
+      <Building2 className="size-4 shrink-0" />{!collapsed && <span className="truncate">{tenantName}</span>}
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="start" className="w-64">
+      <div className="px-3 py-2 text-xs text-muted-foreground">Organizations</div>
+      {viewer.tenants.map(t => <DropdownMenuItem key={t.id} onClick={() => switchTenant(t.id)}>{t.id === tenantId && <Check className="size-4" />}{t.name}</DropdownMenuItem>)}
+    </DropdownMenuContent>
+  </DropdownMenu>
 }
