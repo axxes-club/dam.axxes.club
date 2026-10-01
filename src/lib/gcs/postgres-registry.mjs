@@ -1,7 +1,10 @@
+import { reserveBatch } from "../storage/quota.mjs";
 import { StorageError } from "./core.mjs";
 export class PostgresRegistry {
-  constructor(pool) {
+  constructor(pool, {quotaMode="off"}={}) {
+    if(!["off","shadow","enforce"].includes(quotaMode)) throw new StorageError("Invalid quota mode",503);
     this.pool = pool;
+    this.quotaMode=quotaMode;
   }
   async create(record) {
     await this.pool.query(
@@ -13,6 +16,20 @@ export class PostgresRegistry {
         new Date(record.maxExpiresAt ?? record.expiresAt),
       ],
     );
+  }
+  async createBatch(records) {
+    const client=await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      if(this.quotaMode!=="off") {
+        const metadata=records[0]?.metadata;
+        const key={tenantId:metadata?.tenantId,userId:metadata?.chargingUserId??metadata?.userId};
+        if(!key.tenantId||!key.userId||records.some(r=>r.metadata.tenantId!==key.tenantId||(r.metadata.chargingUserId??r.metadata.userId)!==key.userId)) throw new StorageError("Charging user required",403);
+        await reserveBatch(client,{key,records,enforce:this.quotaMode});
+      }
+      for(const record of records) await client.query("INSERT INTO gcp_asset_uploads(id,owner,document,expires_at) VALUES($1,$2,$3,$4)",[record.id,record.owner,record,new Date(record.maxExpiresAt??record.expiresAt)]);
+      await client.query("COMMIT");
+    } catch(error) {await client.query("ROLLBACK");throw error;} finally{client.release();}
   }
   async get(id) {
     const r = await this.pool.query(

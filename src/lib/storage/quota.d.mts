@@ -5,3 +5,7 @@ export class QuotaError extends Error{status:number;code:string;details:Record<s
 export function parseBytes(value:unknown):bigint;
 export function ensureAccount(client:Pool|PoolClient,key:StorageKey):Promise<void>;
 export function readStorage(client:Pool|PoolClient,key:StorageKey,now?:Date):Promise<StorageSnapshot>;
+export function lockAccount(client:PoolClient,key:StorageKey):Promise<void>;
+export function reserveBatch(client:PoolClient,input:{key:StorageKey;records:Array<{id:string;descriptor:{size:number};maxExpiresAt:number;quota?:StorageKey}>;enforce:'shadow'|'enforce';now?:Date}):Promise<void>;
+export function expireReservations(client:PoolClient,now?:Date):Promise<number>;
+export function cancelReservations(client:PoolClient,input:{key:StorageKey;uploadIds:string[]}):Promise<number>;

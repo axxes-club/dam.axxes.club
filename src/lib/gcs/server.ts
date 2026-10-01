@@ -1,7 +1,7 @@
 import { shareProxyUrl } from "./share-url.mjs";
 import { db } from "@/lib/db";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
-import { Pool } from "pg";
+import { storagePool } from "../storage/database";
 import { PostgresRegistry } from "./postgres-registry.mjs";
 import { Adapter, StorageError, safeKey, objectKeyFromUrl } from "./core.mjs";
 import { GoogleStore } from "./google-store.mjs";
@@ -39,24 +39,6 @@ const aliases = loadAliases({
   manifestObject: process.env.GCS_ALIAS_MANIFEST_OBJECT,
   progressObject: process.env.GCS_COPY_PROGRESS_OBJECT,
 });
-const poolGlobal = globalThis as typeof globalThis & { gcsReceiptPool?: Pool };
-function createReceiptPool() {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 2,
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 30000,
-  });
-  pool.on("error", (error: Error & { code?: string }) => {
-    console.error("GCS receipt pool idle error", error.code ?? "PG_POOL_ERROR");
-  });
-  return pool;
-}
-function receiptPool() {
-  const client = (db as unknown as { $client?: Pool }).$client;
-  if (client && typeof client.connect === "function") return client;
-  return (poolGlobal.gcsReceiptPool ??= createReceiptPool());
-}
 export function storageEnabled() {
   return process.env.GCS_STORAGE_ENABLED === "true";
 }
@@ -80,7 +62,7 @@ export function storageAdapter() {
       origins,
       routes,
       store: new GoogleStore({ bucket }),
-      registry: new PostgresRegistry(receiptPool()),
+      registry: new PostgresRegistry(storagePool(), {quotaMode: process.env.STORAGE_QUOTA_MODE || "off"}),
     });
   }
   return instance;

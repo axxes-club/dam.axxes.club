@@ -178,7 +178,7 @@ export class Adapter {
     if (!["private", "public"].includes(route.visibility))
       fail("Explicit visibility required");
     await this.store.assertPrivate();
-    const results = [];
+    const records = [];
     for (const descriptor of files) {
       const id = randomUUID(),
         suffix = `${this.app}/${digest}/${id}`,
@@ -209,14 +209,14 @@ export class Adapter {
         maxExpiresAt: this.now() + 24 * 60 * 60 * 1000,
         expiresAt: this.now() + 15 * 60 * 1000,
       };
-      await this.registry.create(record);
-      const policy = await this.store.signPost(
-        staging,
-        record.descriptor,
-        objectMetadata,
-        record.expiresAt,
-      );
-      results.push({ uploadId: id, policy });
+      records.push(record);
+    }
+    if(this.registry.createBatch) await this.registry.createBatch(records);
+    else for(const record of records) await this.registry.create(record);
+    const results=[];
+    for(const record of records) {
+      const policy=await this.store.signPost(record.staging,record.descriptor,record.objectMetadata,record.expiresAt);
+      results.push({uploadId:record.id,policy});
     }
     return results;
   }
