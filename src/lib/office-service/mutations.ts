@@ -1,7 +1,7 @@
 import {and,eq,sql} from 'drizzle-orm'
 import {z} from 'zod'
 import {db} from '../db'
-import {assets,assetAppLinks} from '../db/schema'
+import {assetAppLinks} from '../db/schema'
 import {assertLibraryAccess,authorizeAsset,libraryOwnership,ensureFolder} from '../library'
 import {normalizeFolder} from '../assets'
 import type {Viewer} from '../types'

@@ -1,6 +1,5 @@
 import {deleteChargedObject} from "../storage/quota.mjs";
 import { shareProxyUrl } from "./share-url.mjs";
-import { db } from "@/lib/db";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
 import { storagePool } from "../storage/database";
 import { PostgresRegistry } from "./postgres-registry.mjs";

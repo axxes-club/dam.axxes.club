@@ -7,10 +7,10 @@ import { libraryOwnership, assertFolderActive } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { assets, assetFolders } from "@/lib/db/schema";
+import { assetFolders } from "@/lib/db/schema";
 import { guard, jsonError } from "@/lib/api";
 import { normalizeFolder } from "@/lib/assets";
-import { libraryScope, folderScope, ensureFolder } from "@/lib/library";
+import { folderScope, ensureFolder } from "@/lib/library";
 import { queryOverview } from "@/lib/queries";
 import { restoreDeadline } from "@/lib/asset-policy";
 export async function GET(req: NextRequest) {

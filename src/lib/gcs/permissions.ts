@@ -8,7 +8,6 @@ export async function authorizeAssetRead(
   request: Request,
   {
     urls,
-    record,
   }: {
     key?: string;
     urls: string[];
