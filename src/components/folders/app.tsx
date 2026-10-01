@@ -1,5 +1,6 @@
-import { StorageSummary } from "@/components/storage/storage-panel";
 "use client";
+
+import { StorageSummary } from "@/components/storage/storage-panel";
 
 import { AllAppsSwitcher } from "@/components/all-apps-switcher";
 import type { CustomerBrand } from "@/lib/white-label";
