@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/toast";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: { default: "Folders by AXXES", template: "%s · Folders" },
+  title: { default: "Folders", template: "%s · Folders" },
   description: "Store, organize and share your team's files.",
 };
 
