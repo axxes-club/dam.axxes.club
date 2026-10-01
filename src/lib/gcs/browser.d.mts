@@ -5,7 +5,7 @@ export type Uploaded = {
   type: string;
   url: string;
   ufsUrl: string;
-  serverData: any;
+  serverData: unknown;
 };
 export type UploadOptions = {
   files: File[];
@@ -17,11 +17,11 @@ export type UploadOptions = {
   signal?: AbortSignal;
 };
 export function createUploader(
-  options?: any,
+  options?: {endpoint?:string;fetchImpl?:typeof fetch;postImpl?:typeof postFile},
 ): (route: string, options: UploadOptions) => Promise<Uploaded[]>;
 export function postFile(
   file: File,
-  policy: any,
+  policy: {url:string;fields:Record<string,string>},
   onProgress: (fraction: number) => void,
   signal?: AbortSignal,
 ): Promise<void>;

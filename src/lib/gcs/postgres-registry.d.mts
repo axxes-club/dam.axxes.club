@@ -1,4 +1,3 @@
-export class PostgresRegistry {
-  constructor(pool:any, options?: {quotaMode?:string});
-  [key: string]: any;
-}
+import type {Pool,PoolClient} from 'pg';
+import type {Registry,Receipt,UploadedFile} from './contracts.mjs';
+export class PostgresRegistry implements Registry<PoolClient>{constructor(pool:Pool,options?:{quotaMode?:string});create(record:Receipt):Promise<void>;createBatch(records:Receipt[]):Promise<void>;cancelBatch(records:Receipt[]):Promise<number>;get(id:string):Promise<Receipt|null>;renewOnce(id:string,owner:string,run:(record:Receipt,transaction:PoolClient)=>Promise<unknown>):Promise<unknown>;completeOnce(id:string,owner:string,run:(record:Receipt,transaction:PoolClient)=>Promise<UploadedFile>):Promise<UploadedFile>;}
