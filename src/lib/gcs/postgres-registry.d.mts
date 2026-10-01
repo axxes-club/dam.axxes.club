@@ -1,4 +1,4 @@
 export class PostgresRegistry {
-  constructor(options?: any, status?: number);
+  constructor(pool:any, options?: {quotaMode?:string});
   [key: string]: any;
 }

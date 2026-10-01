@@ -187,3 +187,11 @@ export const officeServiceRequests = pgTable("office_service_requests", {
 export const officeUploads = pgTable("office_uploads", {
  id:uuid("id").primaryKey().defaultRandom(),requestId:text("request_id").notNull(),userId:text("user_id").notNull(),libraryId:text("library_id").notNull(),folder:text("folder"),name:text("name").notNull(),mimeType:text("mime_type").notNull(),size:bigint("size",{mode:"number"}).notNull(),storageKey:text("storage_key").unique(),assetId:uuid("asset_id"),expiresAt:timestamp("expires_at",{withTimezone:true}).notNull(),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),
 },t=>[uniqueIndex("office_uploads_user_request_idx").on(t.userId,t.requestId)]);
+import {customType} from 'drizzle-orm/pg-core';
+const byteString=customType<{data:string;driverData:string}>({dataType(){return 'bigint';}});
+export const storageAccounts=pgTable('storage_accounts',{
+ tenantId:uuid('tenant_id').notNull(),userId:text('user_id').notNull(),
+ baseBytes:byteString('base_bytes').notNull().default('5000000000'),
+ usedBytes:byteString('used_bytes').notNull().default('0'),reservedBytes:byteString('reserved_bytes').notNull().default('0'),
+ updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow()
+},t=>[primaryKey({columns:[t.tenantId,t.userId]})]);

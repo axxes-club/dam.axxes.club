@@ -1,3 +1,5 @@
+import { storagePool } from "@/lib/storage/database";
+import { assertChargingUser, chargingUserForHandoff } from "@/lib/storage/authorization.mjs";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as receiptSchema from "@/lib/db/schema";
 import {
@@ -57,7 +59,9 @@ export const ourFileRouter = {
         session.createdById,
         session.folder,
       );
+      const chargingUserId = session.tenantId ? await chargingUserForHandoff(storagePool(),session) : session.createdById;
       return {
+        chargingUserId,
         tenantId: sessionLibrary(session),
         folder: session.folder,
         tokenId: session.id,
@@ -132,6 +136,7 @@ export const ourFileRouter = {
 
       await assertFolderActive(tenant.id, viewer.id, folder);
       await ensureFolder(tenant.id, viewer.id, folder);
+      if (!tenant.id.startsWith("user:") && tenant.id !== "personal") await assertChargingUser(storagePool(),{tenantId:tenant.id,userId:viewer.id});
       return { userId: viewer.id, tenantId: tenant.id, folder };
     })
     .onUploadComplete(async ({ metadata, file, transaction }) => {
