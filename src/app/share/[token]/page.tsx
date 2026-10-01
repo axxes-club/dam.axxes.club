@@ -1,3 +1,4 @@
+import {sharedAssetUrl} from "@/lib/gcs/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
@@ -37,6 +38,8 @@ export default async function SharePage({ params }: { params: { token: string } 
       .limit(FOLDER_LIMIT);
     items = rows.map((row) => toAsset(row));
   }
+
+  items = items.map(asset => ({ ...asset, url: sharedAssetUrl(asset.url, params.token)!, thumbnailUrl: sharedAssetUrl(asset.thumbnailUrl, params.token) }));
 
   return (
     <div className="min-h-dvh bg-sidebar">

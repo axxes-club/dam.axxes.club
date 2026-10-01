@@ -1,10 +1,8 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import * as receiptSchema from "@/lib/db/schema";
-import { createUploadthing, type FileRouter } from "@/lib/gcs/router.mjs";
-import { UploadThingError } from "@/lib/gcs/router.mjs";
+import { createUploadthing, type FileRouter } from "uploadthing/next";
+import { UploadThingError } from "uploadthing/server";
 import { db } from "@/lib/db";
 import { assets, uploadSessions } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getViewer, tenantAccess } from "@/lib/access";
 import { assetTypeOf, normalizeFolder } from "@/lib/assets";
 import { FOLDER_HEADER, TENANT_HEADER } from "@/lib/upload-headers";
@@ -20,14 +18,22 @@ export const ourFileRouter = {
       const token = req.headers.get("x-handoff-token");
       if (!token) throw new UploadThingError("Unauthorized: No token");
 
-      const [session] = await db.select().from(uploadSessions).where(eq(uploadSessions.token, token));
+      const [session] = await db
+        .select()
+        .from(uploadSessions)
+        .where(eq(uploadSessions.token, token));
       if (!session) throw new UploadThingError("Unauthorized: Invalid token");
-      if (session.expiresAt.getTime() < Date.now()) throw new UploadThingError("Session expired");
+      if (session.expiresAt.getTime() < Date.now())
+        throw new UploadThingError("Session expired");
 
-      return { tenantId: session.tenantId, folder: session.folder, tokenId: session.id, tokenStr: session.token };
+      return {
+        tenantId: session.tenantId,
+        folder: session.folder,
+        tokenId: session.id,
+        tokenStr: session.token,
+      };
     })
-    .onUploadComplete(async ({ metadata, file, transaction }) => {
-      const db = drizzle(transaction, { schema: receiptSchema });
+    .onUploadComplete(async ({ metadata, file }) => {
       const [row] = await db
         .insert(assets)
         .values({
@@ -44,7 +50,18 @@ export const ourFileRouter = {
         })
         .returning({ id: assets.id });
 
-      await db.update(uploadSessions).set({ photos: sql`coalesce(${uploadSessions.photos}, '[]'::jsonb) || ${JSON.stringify([file.ufsUrl])}::jsonb` }).where(eq(uploadSessions.id, metadata.tokenId));
+      // Update the session photos array with the new URL so the desktop can poll it
+      const [session] = await db
+        .select()
+        .from(uploadSessions)
+        .where(eq(uploadSessions.id, metadata.tokenId));
+      if (session) {
+        const photos = session.photos || [];
+        await db
+          .update(uploadSessions)
+          .set({ photos: [...photos, file.ufsUrl] })
+          .where(eq(uploadSessions.id, metadata.tokenId));
+      }
 
       return { assetId: row.id };
     }),
@@ -62,15 +79,17 @@ export const ourFileRouter = {
       if (!viewer) throw new UploadThingError("Unauthorized");
 
       const tenant = tenantAccess(viewer, req.headers.get(TENANT_HEADER));
-      if (!tenant?.canWrite) throw new UploadThingError("You can't upload to this workspace");
+      if (!tenant?.canWrite)
+        throw new UploadThingError("You can't upload to this workspace");
 
       const rawFolder = req.headers.get(FOLDER_HEADER);
-      const folder = normalizeFolder(rawFolder ? decodeURIComponent(rawFolder) : null);
+      const folder = normalizeFolder(
+        rawFolder ? decodeURIComponent(rawFolder) : null,
+      );
 
       return { userId: viewer.id, tenantId: tenant.id, folder };
     })
-    .onUploadComplete(async ({ metadata, file, transaction }) => {
-      const db = drizzle(transaction, { schema: receiptSchema });
+    .onUploadComplete(async ({ metadata, file }) => {
       const [row] = await db
         .insert(assets)
         .values({

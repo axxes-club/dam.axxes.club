@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { inArray } from "drizzle-orm";
-import { UTApi } from "uploadthing/server";
+import { deleteStoredUrls } from "@/lib/gcs/server";
 import { db } from "./db";
 import { assets } from "./db/schema";
 import { getViewer, tenantAccess } from "./access";
-import { uploadthingKey } from "./assets";
 import type { TenantAccess, Viewer } from "./types";
 
 type Need = "read" | "write" | "delete";
@@ -39,14 +38,13 @@ export function cleanIds(ids: unknown): string[] {
 // Files uploaded here are removed from storage once no asset (e.g. a duplicate) still points at them.
 export async function removeOrphanedUploads(rows: { url: string; source: string | null }[]) {
   const urls = Array.from(new Set(rows.filter((r) => r.source === "upload").map((r) => r.url)));
-  if (!urls.length || !process.env.UPLOADTHING_TOKEN) return;
+  if (!urls.length) return;
 
   const stillUsed = await db.select({ url: assets.url }).from(assets).where(inArray(assets.url, urls));
   const used = new Set(stillUsed.map((r) => r.url));
-  const keys = urls.filter((u) => !used.has(u)).map(uploadthingKey).filter((k): k is string => !!k);
-  if (!keys.length) return;
-
-  await new UTApi().deleteFiles(keys).catch((err) => {
-    console.error("Failed to delete UploadThing files", keys, err);
+  const orphaned = urls.filter((u) => !used.has(u));
+  if (!orphaned.length) return;
+  await deleteStoredUrls(orphaned).catch(() => {
+    console.error("Failed to delete orphaned GCS assets");
   });
 }
