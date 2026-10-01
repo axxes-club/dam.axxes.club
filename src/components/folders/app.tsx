@@ -145,6 +145,7 @@ export function FoldersApp({ brand = null, ...props }: { viewer: Viewer; initial
     <BrandContext.Provider value={brand}>
       <div style={brand?.accent ? ({ display: "contents", "--primary": brand.accent } as React.CSSProperties) : { display: "contents" }}>
         <FoldersAppInner {...props} />
+        <div className="pointer-events-none fixed bottom-0 right-3 z-10 text-[10px] leading-3 text-muted-foreground">powered by AXXES</div>
       </div>
     </BrandContext.Provider>
   );
@@ -1028,7 +1029,7 @@ function Logo({ className, compact }: { className?: string; compact?: boolean })
         {!compact && (
           <span className="leading-tight">
             <span className="block text-[22px] tracking-tight text-foreground/80">Folders</span>
-            <span className="block text-xs text-muted-foreground">{brand.name} · Powered by AXXES</span>
+            <span className="block text-xs text-muted-foreground">{brand.name}</span>
           </span>
         )}
       </div>
@@ -1041,7 +1042,7 @@ function Logo({ className, compact }: { className?: string; compact?: boolean })
       </div>
       {!compact && (
         <span className="text-[22px] tracking-tight text-foreground/80">
-          Folders <span className="text-sm font-medium text-muted-foreground">by AXXES</span>
+          Folders
         </span>
       )}
     </div>
