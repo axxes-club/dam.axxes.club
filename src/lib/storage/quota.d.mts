@@ -14,3 +14,4 @@ export function lockedCharge(client:PoolClient,input:{objectKey:string;generatio
 export function objectRetained(client:PoolClient,input:{objectKey:string;generation:string}):Promise<boolean>;
 export function releaseObjectCharge(client:PoolClient,input:{objectKey:string;generation:string}):Promise<boolean>;
 export function deleteChargedObject(pool:Pool,input:{objectKey:string;generation:string},remove:()=>Promise<void>):Promise<boolean>;
+export function setBaseAllowance(pool:Pool,input:{actor:import('./types').QuotaActor;key:StorageKey;baseBytes:string;reason:string}):Promise<StorageSnapshot>;

@@ -91,3 +91,14 @@ export async function deleteChargedObject(pool,input,remove) {
   await remove();const released=await releaseObjectCharge(client,input);await client.query('COMMIT');return released;
  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
+export async function setBaseAllowance(pool,{actor,key,baseBytes,reason}) {
+ const bytes=parseBytes(baseBytes);
+ if(typeof reason!=='string'||!reason.trim()||reason.trim().length>1000)throw new QuotaError('A reason between 1 and 1000 characters is required');
+ const {authorizeQuota}=await import('./authorization.mjs');const{randomUUID}=await import('node:crypto');
+ const client=await pool.connect();
+ try{await client.query('BEGIN');const authorized=await authorizeQuota(client,actor,key,true);await lockAccount(client,key);const old=await readStorage(client,key);
+ await client.query('UPDATE storage_accounts SET base_bytes=$3,updated_at=now() WHERE tenant_id=$1 AND user_id=$2',[key.tenantId,key.userId,bytes.toString()]);
+ await client.query('INSERT INTO storage_override_audit(id,tenant_id,user_id,actor_kind,actor_id,old_base_bytes,new_base_bytes,reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[randomUUID(),key.tenantId,key.userId,authorized.kind,authorized.id,old.baseBytes,bytes.toString(),reason.trim()]);
+ const snapshot=await readStorage(client,key);await client.query('COMMIT');return snapshot;
+ }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+}
