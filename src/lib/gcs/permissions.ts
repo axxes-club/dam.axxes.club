@@ -6,7 +6,14 @@ import { verifyShareToken } from "@/lib/share";
 import { matchesShare, tenantCanRead } from "./permissions-core.mjs";
 export async function authorizeAssetRead(
   request: Request,
-  { urls, record }: any,
+  {
+    urls,
+    record,
+  }: {
+    key?: string;
+    urls: string[];
+    record?: { metadata: { tenantId?: string } } | null;
+  },
 ) {
   const candidates = await db
     .select()

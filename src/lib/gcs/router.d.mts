@@ -13,7 +13,11 @@ type Builder<I, M> = {
   files: Limits;
   input<T>(parser: { parseAsync(value: unknown): Promise<T> }): Builder<T, M>;
   middleware<T>(
-    fn: (value: { req: Request; input: I }) => Promise<T>,
+    fn: (value: {
+      req: Request;
+      input: I;
+      phase: "init" | "continue" | "replay";
+    }) => Promise<T>,
   ): Builder<I, T>;
   onUploadComplete(
     fn: (value: {

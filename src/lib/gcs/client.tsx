@@ -9,7 +9,7 @@ type Uploaded = {
   type: string;
   url: string;
   ufsUrl: string;
-  serverData: any;
+  serverData: Record<string, unknown>;
 };
 type Options = {
   onUploadBegin?: (fileName: string) => void;
@@ -22,7 +22,9 @@ const upload = createProviderUpload({
   gcsUpload: createUploader(),
   legacyUpload: async (route, options) => {
     const { generateReactHelpers } = await import("@uploadthing/react");
-    return generateReactHelpers<any>().uploadFiles(route, {
+    return generateReactHelpers<
+      import("uploadthing/server").FileRouter
+    >().uploadFiles(route, {
       ...options,
       onUploadProgress: (event) =>
         options.onUploadProgress?.(event.totalProgress),

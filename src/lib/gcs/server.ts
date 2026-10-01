@@ -60,7 +60,7 @@ function receiptPool() {
 export function storageEnabled() {
   return process.env.GCS_STORAGE_ENABLED === "true";
 }
-let instance: any;
+let instance: Adapter | undefined;
 export function storageAdapter() {
   if (!instance) {
     const routePolicies = policies.dam;
@@ -130,7 +130,11 @@ export function storageHandlers() {
       if (!key) throw new StorageError("Unknown asset", 404);
       return key;
     },
-    authorizeRead: async (request: Request, key: string, file: any) => {
+    authorizeRead: async (
+      request: Request,
+      key: string,
+      file: { metadata?: Record<string, string> },
+    ) => {
       const id = file.metadata?.uploadId ?? file.metadata?.uploadid;
       const record = id ? await adapter.registry.get(id) : null;
       return authorizeAssetRead(request, {

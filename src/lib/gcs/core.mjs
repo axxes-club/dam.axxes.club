@@ -170,7 +170,9 @@ export class Adapter {
     const route = this.routes[routeName];
     if (!route) fail("Unknown upload route");
     validateFiles(files, route.files);
-    const authorization = await route.authorize(request, input);
+    const authorization = await route.authorize(request, input, {
+      phase: "init",
+    });
     const owner = authorization.owner;
     const digest = ownerDigest(owner);
     if (!["private", "public"].includes(route.visibility))
@@ -226,7 +228,9 @@ export class Adapter {
     if (!record || record.app !== this.app) fail("No such upload", 404);
     const route = this.routes[record.route];
     if (!route) fail("Upload route removed", 404);
-    const authorization = await route.authorize(request, input);
+    const authorization = await route.authorize(request, input, {
+      phase: record.result != null ? "replay" : "continue",
+    });
     if (!isDeepStrictEqual(authorization.metadata ?? {}, record.metadata))
       fail("Upload metadata mismatch", 403);
     if (authorization.owner !== record.owner)
@@ -255,7 +259,9 @@ export class Adapter {
     if (!record || record.app !== this.app) fail("No such upload", 404);
     const route = this.routes[record.route];
     if (!route) fail("Upload route removed", 404);
-    const authorization = await route.authorize(request, input);
+    const authorization = await route.authorize(request, input, {
+      phase: record.result != null ? "replay" : "continue",
+    });
     if (!isDeepStrictEqual(authorization.metadata ?? {}, record.metadata))
       fail("Upload metadata mismatch", 403);
     if (authorization.owner !== record.owner)

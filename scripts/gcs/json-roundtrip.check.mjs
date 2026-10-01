@@ -112,3 +112,91 @@ for (const kind of ["Postgres", "Prisma"])
       /mismatch/,
     );
   });
+for (const kind of ["Postgres", "Prisma"])
+  test(`${kind} continuation reauthorizes bans but not expired admission tickets or exhausted new-upload quota`, async () => {
+    let clock = 1000,
+      quota = 0,
+      banned = false,
+      callbacks = 0;
+    const phases = [];
+    const f = createUploadthing();
+    const routes = compileRouter(
+      {
+        guest: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
+          .middleware(async ({ phase }) => {
+            phases.push(phase);
+            if (banned) throw Error("Banned");
+            if (phase !== "continue" && phase !== "replay") {
+              if (clock > 301000) throw Error("Ticket expired");
+              if (quota >= 1) throw Error("Quota reached");
+            }
+            return {
+              eventId: "event-a",
+              guestId: "guest-a",
+              userId: undefined,
+            };
+          })
+          .onUploadComplete(async () => {
+            callbacks++;
+            quota++;
+            return { photoId: "last-allowed" };
+          }),
+      },
+      { guest: "private" },
+    );
+    let object;
+    const store = {
+      assertPrivate: async () => {},
+      signPost: async (key, descriptor, metadata) => {
+        object = {
+          size: descriptor.size,
+          contentType: descriptor.type,
+          generation: "1",
+          metadata,
+        };
+        return { url: "https://storage.invalid", fields: { key } };
+      },
+      stat: async () => object,
+      freeze: async () => object,
+      delete: async () => {
+        object = null;
+      },
+    };
+    const adapter = new Adapter({
+      app: "vibez",
+      bucket: "private-bucket",
+      baseUrl: "https://vibez.axxes.club",
+      routes,
+      store,
+      registry: registry(kind),
+      now: () => clock,
+    });
+    const request = new Request("https://vibez.axxes.club/api/storage", {
+      headers: { origin: "https://vibez.axxes.club" },
+    });
+    const [receipt] = await adapter.init(
+      request,
+      "guest",
+      [{ name: "synthetic.png", type: "image/png", size: 123 }],
+      { phase: "replay" },
+    );
+    clock += 10 * 60000;
+    assert.ok((await adapter.renew(request, receipt.uploadId)).policy);
+    const result = await adapter.complete(request, receipt.uploadId);
+    assert.equal(quota, 1);
+    assert.deepEqual(await adapter.complete(request, receipt.uploadId), result);
+    assert.deepEqual(await adapter.renew(request, receipt.uploadId), {
+      complete: result,
+    });
+    assert.equal(callbacks, 1);
+    assert.deepEqual(phases, [
+      "init",
+      "continue",
+      "continue",
+      "replay",
+      "replay",
+    ]);
+    banned = true;
+    await assert.rejects(adapter.complete(request, receipt.uploadId), /Banned/);
+    await assert.rejects(adapter.renew(request, receipt.uploadId), /Banned/);
+  });

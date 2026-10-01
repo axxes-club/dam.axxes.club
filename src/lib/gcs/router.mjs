@@ -66,13 +66,14 @@ export function compileRouter(router, visibility) {
         {
           files,
           visibility: visibility[name],
-          authorize: async (request, input) => {
+          authorize: async (request, input, context) => {
             const validated = builder.parser
               ? await builder.parser.parseAsync(input)
               : input;
             const raw = await builder.authorizeHook({
               req: request,
               input: validated,
+              phase: context?.phase ?? "init",
             });
             const metadata = JSON.parse(
               JSON.stringify(

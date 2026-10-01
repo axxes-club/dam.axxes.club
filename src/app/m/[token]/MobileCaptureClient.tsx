@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { LocalPreviews } from "@/lib/gcs/local-previews.mjs";
 import { Camera, Images, Check, Loader2, AlertTriangle } from "lucide-react";
 import { useUploadThing } from "@/utils/uploadthing";
 
@@ -14,15 +15,18 @@ export default function MobileCaptureClient({
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
 
+  const previews = useRef(new LocalPreviews());
+  useEffect(() => () => previews.current.dispose(), []);
+
   const [sent, setSent] = useState<string[]>([]);
   const [pending, setPending] = useState(0);
   const [view, setView] = useState<"capture" | "success" | "done">("capture");
   const [error, setError] = useState("");
 
   const { startUpload } = useUploadThing("handoffUploader", {
-    onClientUploadComplete: res => {
+    onClientUploadComplete: () => {
       if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([50, 100, 50]);
-      const urls = (res ?? []).map(file => file.ufsUrl).filter(Boolean) as string[];
+      const urls = previews.current.complete();
       setSent(current => [...urls, ...current]);
       setPending(0);
       setView("success");
@@ -38,6 +42,7 @@ export default function MobileCaptureClient({
     if (!files || files.length === 0) return;
     setError("");
     setPending(files.length);
+    previews.current.select(Array.from(files));
     startUpload(Array.from(files));
   };
 
