@@ -470,3 +470,21 @@ test("renewal and completion cannot reauthorize a different folder for the same 
     /metadata mismatch/,
   );
 });
+test("completion passes the receipt validated MIME to immutable copy outside custom identity metadata", async () => {
+  const f = setup();
+  const [u] = await f.adapter.init(f.request(), "assetUploader", [file]);
+  const r = f.rows.get(u.uploadId);
+  f.objects.set(r.staging, {
+    size: file.size,
+    contentType: file.type,
+    generation: "7",
+    metadata: r.objectMetadata,
+  });
+  const freeze = f.store.freeze.bind(f.store);
+  f.store.freeze = async (...args) => {
+    assert.equal(args[4], file.type);
+    assert.equal(args[3].contentType, undefined);
+    return freeze(...args);
+  };
+  await f.adapter.complete(f.request(), u.uploadId);
+});

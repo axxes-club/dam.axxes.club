@@ -15,24 +15,28 @@ export class GoogleStore {
     };
     for (const [k, v] of Object.entries(metadata))
       fields["x-goog-meta-" + k] = v;
-    const [policy] = await this.bucket.file(key).generateSignedPostPolicyV4({
-      expires,
-      fields,
-      conditions: [["content-length-range", file.size, file.size]],
-    });
+    const [policy] = await this.bucket
+      .file(key)
+      .generateSignedPostPolicyV4({
+        expires,
+        fields,
+        conditions: [["content-length-range", file.size, file.size]],
+      });
     return policy;
   }
   async save(key, data, metadata) {
     const { contentType, ...custom } = metadata;
-    await this.bucket.file(key).save(data, {
-      resumable: false,
-      preconditionOpts: { ifGenerationMatch: 0 },
-      metadata: {
-        contentType,
-        cacheControl: "private, no-store",
-        metadata: custom,
-      },
-    });
+    await this.bucket
+      .file(key)
+      .save(data, {
+        resumable: false,
+        preconditionOpts: { ifGenerationMatch: 0 },
+        metadata: {
+          contentType,
+          cacheControl: "private, no-store",
+          metadata: custom,
+        },
+      });
   }
   async stat(key) {
     try {
@@ -48,13 +52,16 @@ export class GoogleStore {
       throw e;
     }
   }
-  async freeze(from, to, generation, metadata) {
+  async freeze(from, to, generation, metadata, contentType) {
     try {
-      await this.bucket.file(from, { generation }).copy(this.bucket.file(to), {
-        preconditionOpts: { ifGenerationMatch: 0 },
-        metadata,
-        cacheControl: "private, no-store",
-      });
+      await this.bucket
+        .file(from, { generation })
+        .copy(this.bucket.file(to), {
+          preconditionOpts: { ifGenerationMatch: 0 },
+          metadata,
+          contentType,
+          cacheControl: "private, no-store",
+        });
     } catch (e) {
       if (e.code !== 412) throw e;
     }
@@ -63,18 +70,22 @@ export class GoogleStore {
     return this.stat(to);
   }
   async readUrl(key, generation, expires) {
-    const [url] = await this.bucket.file(key).getSignedUrl({
-      version: "v4",
-      action: "read",
-      expires,
-      queryParams: { generation },
-    });
+    const [url] = await this.bucket
+      .file(key)
+      .getSignedUrl({
+        version: "v4",
+        action: "read",
+        expires,
+        queryParams: { generation },
+      });
     return url;
   }
   async delete(key, generation) {
-    await this.bucket.file(key).delete({
-      preconditionOpts: { ifGenerationMatch: generation },
-      ignoreNotFound: true,
-    });
+    await this.bucket
+      .file(key)
+      .delete({
+        preconditionOpts: { ifGenerationMatch: generation },
+        ignoreNotFound: true,
+      });
   }
 }

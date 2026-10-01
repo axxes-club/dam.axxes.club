@@ -282,6 +282,7 @@ export class Adapter {
           current.key,
           uploaded.generation,
           current.objectMetadata,
+          current.descriptor.type,
         );
         this.checkObject(frozen, current);
         const url =

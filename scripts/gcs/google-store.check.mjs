@@ -63,3 +63,54 @@ test("read URL is SDK-signed and generation-bound", async () => {
   assert.equal(u.searchParams.get("generation"), "7");
   assert.equal(u.searchParams.get("X-Goog-Algorithm"), "GOOG4-RSA-SHA256");
 });
+test("actual installed SDK rewrite preserves validated MIME with replacement metadata and generation guards", async () => {
+  const storage = new Storage({ projectId: "synthetic" });
+  let rewrite;
+  // Substitute only network transport. The installed SDK constructs the real rewrite request.
+  storage.request = (options, callback) => {
+    if (options.method === "POST") {
+      rewrite = options;
+      callback(
+        null,
+        { done: true, resource: { generation: "22" } },
+        { statusCode: 200 },
+      );
+    } else
+      callback(
+        null,
+        {
+          size: "68",
+          generation: "22",
+          contentType: rewrite.json.contentType,
+          metadata: rewrite.json.metadata,
+        },
+        { statusCode: 200 },
+      );
+  };
+  const store = new GoogleStore({
+    storage,
+    bucket: "synthetic-private-bucket",
+  });
+  const identity = {
+    app: "vibez",
+    owner: "synthetic",
+    route: "photo",
+    uploadid: "synthetic-id",
+    visibility: "private",
+  };
+  const result = await store.freeze(
+    "staging/vibez/source",
+    "uploads/vibez/destination",
+    "11",
+    identity,
+    "image/png",
+  );
+  assert.equal(result.contentType, "image/png");
+  assert.equal(String(rewrite.qs.sourceGeneration), "11");
+  assert.equal(rewrite.qs.ifGenerationMatch, 0);
+  assert.equal(rewrite.json.contentType, "image/png");
+  assert.equal(rewrite.json.cacheControl, "private, no-store");
+  assert.deepEqual(rewrite.json.metadata, identity);
+  assert.equal(rewrite.json.metadata.contentType, undefined);
+  assert.equal(rewrite.qs.destinationPredefinedAcl, undefined);
+});
