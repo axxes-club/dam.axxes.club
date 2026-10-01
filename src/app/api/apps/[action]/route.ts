@@ -11,6 +11,7 @@ import { normalizeFolder, assetTypeOf } from "@/lib/assets";
 import { deliverAsset } from "@/lib/delivery";
 import { completedFile } from "@/lib/apps/completed-file";
 import { enqueueStorageCleanup } from "@/lib/storage-cleanup";
+import { publicOrigin } from "@/lib/public-origin";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const assetResult = (row: typeof assets.$inferSelect) => ({ id: row.id, name: row.originalFilename || row.name, mimeType: row.mimeType, folder: row.folder, size: row.fileSize, expiresAt: row.expiresAt?.toISOString() || null });
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: { action: str
 
     if (action === "destinations") {
       const shared = await sharedFolderDestinations(viewer);
-      return NextResponse.json({ destinations: [...viewer.tenants.map(t => ({ id: t.id, name: t.name, canWrite: t.canWrite, owner: t.id === "personal" ? viewer.name : t.name })), ...shared.filter(r => r.canRead).map(r => ({ id: r.libraryId, name: `Shared: ${r.folder}`, owner: r.ownerUserId || viewer.tenants.find(t => t.id === r.tenantId)?.name || "Workspace owner", canWrite: r.canWrite, folder: r.folder }))], foldersUrl: req.nextUrl.origin, preferenceKey: `axxes:asset-destination:${appKey}:${viewer.id}` });
+      return NextResponse.json({ destinations: [...viewer.tenants.map(t => ({ id: t.id, name: t.name, canWrite: t.canWrite, owner: t.id === "personal" ? viewer.name : t.name })), ...shared.filter(r => r.canRead).map(r => ({ id: r.libraryId, name: `Shared: ${r.folder}`, owner: r.ownerUserId || viewer.tenants.find(t => t.id === r.tenantId)?.name || "Workspace owner", canWrite: r.canWrite, folder: r.folder }))], foldersUrl: publicOrigin(req), preferenceKey: `axxes:asset-destination:${appKey}:${viewer.id}` });
     }
     const libraryId = typeof p.libraryId === "string" ? p.libraryId : "personal";
     const folder = normalizeFolder(p.folder);
