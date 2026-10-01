@@ -1,3 +1,5 @@
+import { storagePool } from "@/lib/storage/database";
+import { assertChargingUser, chargingUserForHandoff } from "@/lib/storage/authorization.mjs";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as receiptSchema from "@/lib/db/schema";
 import { createUploadthing, type FileRouter } from "@/lib/gcs/router.mjs";
@@ -24,7 +26,8 @@ export const ourFileRouter = {
       if (!session) throw new UploadThingError("Unauthorized: Invalid token");
       if (session.expiresAt.getTime() < Date.now()) throw new UploadThingError("Session expired");
 
-      return { tenantId: session.tenantId, folder: session.folder, tokenId: session.id, tokenStr: session.token };
+      const chargingUserId=await chargingUserForHandoff(storagePool(),session);
+      return { tenantId: session.tenantId, folder: session.folder, tokenId: session.id, tokenStr: session.token, chargingUserId };
     })
     .onUploadComplete(async ({ metadata, file, transaction }) => {
       const db = drizzle(transaction, { schema: receiptSchema });
@@ -67,6 +70,7 @@ export const ourFileRouter = {
       const rawFolder = req.headers.get(FOLDER_HEADER);
       const folder = normalizeFolder(rawFolder ? decodeURIComponent(rawFolder) : null);
 
+      await assertChargingUser(storagePool(),{tenantId:tenant.id,userId:viewer.id});
       return { userId: viewer.id, tenantId: tenant.id, folder };
     })
     .onUploadComplete(async ({ metadata, file, transaction }) => {

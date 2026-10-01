@@ -1,4 +1,4 @@
-import { reserveBatch } from "../storage/quota.mjs";
+import { reserveBatch, lockAccount, commitCharge, cancelReservations } from "../storage/quota.mjs";
 import { StorageError } from "./core.mjs";
 export class PostgresRegistry {
   constructor(pool, {quotaMode="off"}={}) {
@@ -31,6 +31,15 @@ export class PostgresRegistry {
       await client.query("COMMIT");
     } catch(error) {await client.query("ROLLBACK");throw error;} finally{client.release();}
   }
+  async cancelBatch(records) {
+    const client=await this.pool.connect();
+    try{await client.query("BEGIN");let count=0;
+      const groups=new Map();
+      for(const record of records)if(record.quota){const group=JSON.stringify(record.quota);if(!groups.has(group))groups.set(group,[]);groups.get(group).push(record);}
+      for(const group of [...groups.keys()].sort()){const records=groups.get(group);count+=await cancelReservations(client,{key:records[0].quota,uploadIds:records.map(r=>r.id)});}
+      await client.query("COMMIT");return count;
+    }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+  }
   async get(id) {
     const r = await this.pool.query(
       "SELECT document,result FROM gcp_asset_uploads WHERE id=$1",
@@ -53,6 +62,10 @@ export class PostgresRegistry {
       let result;
       if (row.result != null) result = { complete: row.result };
       else {
+        if(row.document.quota) {
+          const {rows:[reservation]}=await client.query("SELECT state,expires_at FROM storage_reservations WHERE upload_id=$1",[id]);
+          if(!reservation||reservation.state!=="pending"||new Date(reservation.expires_at)<=new Date())throw new StorageError("Upload reservation closed",410);
+        }
         result = await renew(row.document, client);
         const deadline = row.document.maxExpiresAt ?? row.document.expiresAt;
         await client.query(
@@ -81,7 +94,14 @@ export class PostgresRegistry {
         throw new StorageError("Upload owner mismatch", 403);
       let result = r.rows[0].result;
       if (result == null) {
-        result = await run(r.rows[0].document, client);
+        const document=r.rows[0].document;
+        if(document.quota) {
+          await lockAccount(client,document.quota);
+          const {rows:[reservation]}=await client.query("SELECT state,expires_at FROM storage_reservations WHERE upload_id=$1 FOR UPDATE",[id]);
+          if(!reservation||reservation.state!=="pending"||new Date(reservation.expires_at)<=new Date())throw new StorageError("Upload reservation closed",410);
+        }
+        result = await run(document, client);
+        if(document.quota) await commitCharge(client,{uploadId:id,assetId:result.serverData?.assetId,objectKey:result.key,generation:result.generation,actualBytes:String(result.size)});
         await client.query(
           "UPDATE gcp_asset_uploads SET result=$2 WHERE id=$1",
           [id, result],

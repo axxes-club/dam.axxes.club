@@ -9,3 +9,4 @@ export function lockAccount(client:PoolClient,key:StorageKey):Promise<void>;
 export function reserveBatch(client:PoolClient,input:{key:StorageKey;records:Array<{id:string;descriptor:{size:number};maxExpiresAt:number;quota?:StorageKey}>;enforce:'shadow'|'enforce';now?:Date}):Promise<void>;
 export function expireReservations(client:PoolClient,now?:Date):Promise<number>;
 export function cancelReservations(client:PoolClient,input:{key:StorageKey;uploadIds:string[]}):Promise<number>;
+export function commitCharge(client:PoolClient,input:{uploadId:string;assetId:string;objectKey:string;generation:string;actualBytes:string;now?:Date}):Promise<void>;

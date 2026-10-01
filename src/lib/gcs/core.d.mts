@@ -12,3 +12,5 @@ export function ownerDigest(...args: any[]): any;
 export function validateFiles(...args: any[]): any;
 export function assertPrivateBucket(...args: any[]): any;
 export function corsForOrigins(...args: any[]): any;
+
+export function boundMetadataMatches(record:any,current:any):boolean;

@@ -50,6 +50,8 @@ export function handlers(
           ? await adapter.init(request, body.route, body.files, body.input)
           : body.action === "complete"
             ? await adapter.complete(request, body.uploadId, body.input)
+            : body.action === "cancel"
+              ? await adapter.cancel(request,body.uploadIds,body.input)
             : body.action === "renew"
               ? await adapter.renew(request, body.uploadId, body.input)
               : (() => {

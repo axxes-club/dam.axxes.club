@@ -55,3 +55,16 @@ export async function cancelReservations(client,{key,uploadIds}) {
  const bytes=rows.reduce((sum,r)=>sum+BigInt(r.bytes),0n);
  await client.query('UPDATE storage_accounts SET reserved_bytes=reserved_bytes-$3,updated_at=now() WHERE tenant_id=$1 AND user_id=$2',[key.tenantId,key.userId,bytes.toString()]);return rows.length;
 }
+export async function commitCharge(client,{uploadId,assetId,objectKey,generation,actualBytes,now=new Date()}) {
+ const {rows:[initial]}=await client.query('SELECT tenant_id,user_id FROM storage_reservations WHERE upload_id=$1',[uploadId]);
+ if(!initial)throw new QuotaError('Upload has no reservation',409);
+ const key={tenantId:initial.tenant_id,userId:initial.user_id};await lockAccount(client,key);
+ const {rows:[r]}=await client.query('SELECT *,bytes::text FROM storage_reservations WHERE upload_id=$1 FOR UPDATE',[uploadId]);
+ if(r.state==='complete')return;
+ if(r.state!=='pending'||new Date(r.expires_at)<=now)throw new QuotaError('Upload reservation is closed',410);
+ if(parseBytes(actualBytes)!==BigInt(r.bytes))throw new QuotaError('Actual upload size differs from reservation',409);
+ await client.query('INSERT INTO storage_object_charges(object_key,generation,tenant_id,user_id,bytes) VALUES($1,$2,$3,$4,$5)',[objectKey,generation,key.tenantId,key.userId,actualBytes]);
+ await client.query('INSERT INTO storage_asset_links(asset_id,object_key,generation) VALUES($1,$2,$3)',[assetId,objectKey,generation]);
+ await client.query("UPDATE storage_reservations SET state='complete' WHERE upload_id=$1",[uploadId]);
+ await client.query('UPDATE storage_accounts SET reserved_bytes=reserved_bytes-$3,used_bytes=used_bytes+$3,updated_at=now() WHERE tenant_id=$1 AND user_id=$2',[key.tenantId,key.userId,actualBytes]);
+}
