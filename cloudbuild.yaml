@@ -30,6 +30,18 @@
       ]
     },
     {
+      "id": "unit-storage-tests",
+      "name": "gcr.io/cloud-builders/docker",
+      "args": [
+        "run",
+        "--rm",
+        "ci-check:$BUILD_ID",
+        "npm",
+        "run",
+        "test:storage"
+      ]
+    },
+    {
       "id": "runtime-image",
       "name": "gcr.io/cloud-builders/docker",
       "args": [
