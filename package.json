@@ -9,7 +9,9 @@
     "lint": "next lint",
     "test": "tsx --test src/lib/*.test.ts src/lib/apps/*.test.ts src/components/folders/*.test.ts",
     "test:storage": "node --test scripts/gcs/*.check.mjs",
-    "test:office-domain": "tsx --test tests/office-links-domain.test.ts"
+    "test:office-domain": "tsx --test tests/office-links-domain.test.ts",
+    "test:quota": "node --test scripts/gcs/*.check.mjs",
+    "test:quota-ui": "node --test scripts/storage/*.check.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

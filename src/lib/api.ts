@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { inArray } from "drizzle-orm";
-import { deleteStoredUrls } from "@/lib/gcs/server";
+import { keyForUrl } from "@/lib/gcs/server";
+import { enqueueStorageCleanup, processStorageCleanup } from "./storage-cleanup";
 import { db } from "./db";
 import { assets } from "./db/schema";
 import { getViewer, tenantAccess } from "./access";
@@ -62,7 +63,11 @@ export async function removeOrphanedUploads(rows: { url: string; source: string 
   const used = new Set(stillUsed.map((r) => r.url));
   const orphaned = urls.filter((u) => !used.has(u));
   if (!orphaned.length) return;
-  await deleteStoredUrls(orphaned).catch(() => {
-    console.error("Failed to delete orphaned GCS assets");
-  });
+  const keys = (await Promise.all(orphaned.map(async url => {
+    const mapped = await keyForUrl(url);
+    if (mapped) return mapped.startsWith("uploads/") ? mapped : null;
+    return /\/f\/([^/?#]+)/.exec(url)?.[1] ?? null;
+  }))).filter((key): key is string => !!key);
+  await enqueueStorageCleanup(keys);
+  await processStorageCleanup();
 }

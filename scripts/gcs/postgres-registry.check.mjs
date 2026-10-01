@@ -84,3 +84,15 @@ test("locked receipt rejects another owner before callback", async () => {
   assert.equal(writes, 0);
   assert.equal(f.state().result, null);
 });
+
+test("organization enforcement preserves personal and shared personal library receipts", async () => {
+ for (const tenantId of ["personal", "user:owner"]) {
+  const statements = [];
+  const client = { query: async (sql) => { statements.push(sql); return {rows:[]}; }, release() {} };
+  const registry = new PostgresRegistry({connect:async()=>client}, {quotaMode:"enforce"});
+  await registry.createBatch([{id:"receipt",owner:"user:viewer",metadata:{tenantId,userId:"viewer"},expiresAt:Date.now()+60000}]);
+  assert.equal(statements.filter(sql=>sql.startsWith("INSERT INTO gcp_asset_uploads")).length,1);
+  assert.equal(statements.some(sql=>sql.includes("storage_accounts")),false);
+  assert.equal(statements.at(-1),"COMMIT");
+ }
+});

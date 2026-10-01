@@ -1,3 +1,4 @@
+import { StorageSummary } from "@/components/storage/storage-panel";
 "use client";
 
 import { AllAppsSwitcher } from "@/components/all-apps-switcher";
@@ -640,6 +641,7 @@ function FoldersAppInner({ viewer, handshakeUrl, initialTenantId }: { viewer: Vi
             onHandoff={() => setHandoffOpen(true)}
           />
         )}
+        {tenantId && /^[0-9a-f-]{36}$/i.test(tenantId) && !sidebarCollapsed && <StorageSummary tenantId={tenantId} />}
         <nav className="mt-4 flex-1 overflow-y-auto text-sm">
           <NavItem icon={Home} label="Home" active={!q && view.kind === "home"} onClick={() => go({ kind: "home" })} {...dropProps(null)} dropActive={dropFolder === UNFILED} />
           <NavItem icon={Trash2} label="Trash" active={view.kind === "trash"} onClick={() => go({kind:"trash"})} />

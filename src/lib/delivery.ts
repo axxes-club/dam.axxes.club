@@ -1,3 +1,4 @@
+import { keyForUrl, storageAdapter, storageEnabled } from "./gcs/server";
 import { UTApi } from "uploadthing/server";
 import type { AssetRow } from "./db/schema";
 export async function deliverAsset(row: AssetRow): Promise<Response> {
@@ -15,10 +16,11 @@ export async function deliverAsset(row: AssetRow): Promise<Response> {
   }
   if (row.source !== "upload" || !row.storageKey)
     return new Response("Storage protection pending", { status: 409 });
-  const signed = await new UTApi().getSignedURL(row.storageKey, {
-    expiresIn: 60,
-  });
-  const upstream = await fetch(signed.ufsUrl, { cache: "no-store" });
+  const key = storageEnabled() ? await keyForUrl(row.url) : null;
+  const target = key
+    ? await storageAdapter().read(null, key, async () => true)
+    : (await new UTApi().getSignedURL(row.storageKey, { expiresIn: 60 })).ufsUrl;
+  const upstream = await fetch(target, { cache: "no-store" });
   if (!upstream.ok) return new Response(null, { status: 502 });
   const safeType = /^(image\/(png|jpeg|gif|webp|avif)|video\/|audio\/)/.test(
     row.mimeType ?? "",

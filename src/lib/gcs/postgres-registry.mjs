@@ -21,7 +21,7 @@ export class PostgresRegistry {
     const client=await this.pool.connect();
     try {
       await client.query("BEGIN");
-      if(this.quotaMode!=="off") {
+      if(this.quotaMode!=="off" && records[0]?.metadata?.tenantId !== "personal" && !records[0]?.metadata?.tenantId?.startsWith("user:")) {
         const metadata=records[0]?.metadata;
         const key={tenantId:metadata?.tenantId,userId:metadata?.chargingUserId??metadata?.userId};
         if(!key.tenantId||!key.userId||records.some(r=>r.metadata.tenantId!==key.tenantId||(r.metadata.chargingUserId??r.metadata.userId)!==key.userId)) throw new StorageError("Charging user required",403);

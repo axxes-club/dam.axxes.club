@@ -1,3 +1,4 @@
+import { deleteStoredUrls, stableAssetUrl, storageAdapter } from "./gcs/server";
 import { eq, lte, sql } from "drizzle-orm";
 import { UTApi } from "uploadthing/server";
 import { db } from "./db";
@@ -41,11 +42,13 @@ export async function processStorageCleanup(
       continue;
     }
     try {
-      if (!deleteFiles && !process.env.UPLOADTHING_TOKEN)
+      if (!deleteFiles && !row.storageKey.startsWith("uploads/") && !process.env.UPLOADTHING_TOKEN)
         throw new Error("UPLOADTHING_TOKEN not configured");
       const success = deleteFiles
         ? await deleteFiles(row.storageKey)
-        : (await new UTApi().deleteFiles(row.storageKey)).success;
+        : row.storageKey.startsWith("uploads/")
+          ? (await deleteStoredUrls([stableAssetUrl(row.storageKey)])) > 0 || !(await storageAdapter().store.stat(row.storageKey))
+          : (await new UTApi().deleteFiles(row.storageKey)).success;
       if (!success) throw new Error("Storage did not confirm deletion");
       await database
         .delete(folderStorageCleanup)

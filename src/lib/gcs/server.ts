@@ -147,7 +147,7 @@ export async function deleteStoredUrls(urls: string[]) {
     const pool=storagePool();
     let charge: {generation:string} | undefined;
     try {charge=(await pool.query("SELECT generation FROM storage_object_charges WHERE object_key=$1 ORDER BY created_at DESC LIMIT 1",[key])).rows[0];}
-    catch(error) {if((error as {code?:string}).code!=="42703" || (process.env.STORAGE_QUOTA_MODE && process.env.STORAGE_QUOTA_MODE!=="off"))throw error;}
+    catch(error) {if(!["42703", "42P01"].includes((error as {code?:string}).code ?? "") || (process.env.STORAGE_QUOTA_MODE && process.env.STORAGE_QUOTA_MODE!=="off"))throw error;}
     if(charge) {
       // Each service can delete only its own prefix; the owning service's GC handles cross-app removals.
       if(!key.startsWith("uploads/dam/"))continue;

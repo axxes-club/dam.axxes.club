@@ -34,7 +34,7 @@ function sessionLibrary(session: { tenantId: string | null; ownerUserId: string 
 
 export const ourFileRouter = {
   handoffUploader: f({
-    image: { acl: "private", maxFileSize: "16MB", maxFileCount: 10 },
+    image: { maxFileSize: "16MB", maxFileCount: 10 },
   })
     .middleware(async ({ req }) => {
       // The handoff token is passed in a custom header
@@ -59,7 +59,7 @@ export const ourFileRouter = {
         session.createdById,
         session.folder,
       );
-      const chargingUserId = session.tenantId ? await chargingUserForHandoff(storagePool(),session) : session.createdById;
+      const chargingUserId = session.tenantId ? await chargingUserForHandoff(storagePool(),{tenantId: session.tenantId, createdById: session.createdById}) : session.createdById;
       return {
         chargingUserId,
         tenantId: sessionLibrary(session),
@@ -118,12 +118,12 @@ export const ourFileRouter = {
     }),
 
   assetUploader: f({
-    image: { acl: "private", maxFileSize: "16MB", maxFileCount: 50 },
-    video: { acl: "private", maxFileSize: "512MB", maxFileCount: 10 },
-    audio: { acl: "private", maxFileSize: "64MB", maxFileCount: 20 },
-    pdf: { acl: "private", maxFileSize: "64MB", maxFileCount: 20 },
-    text: { acl: "private", maxFileSize: "4MB", maxFileCount: 20 },
-    blob: { acl: "private", maxFileSize: "64MB", maxFileCount: 20 },
+    image: { maxFileSize: "16MB", maxFileCount: 50 },
+    video: { maxFileSize: "512MB", maxFileCount: 10 },
+    audio: { maxFileSize: "64MB", maxFileCount: 20 },
+    pdf: { maxFileSize: "64MB", maxFileCount: 20 },
+    text: { maxFileSize: "4MB", maxFileCount: 20 },
+    blob: { maxFileSize: "64MB", maxFileCount: 20 },
   })
     .middleware(async ({ req }) => {
       const viewer = await getViewer(req.headers);
