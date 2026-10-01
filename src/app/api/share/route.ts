@@ -6,6 +6,7 @@ import { assets } from "@/lib/db/schema";
 import { guard, jsonError } from "@/lib/api";
 import { normalizeFolder } from "@/lib/assets";
 import { createShareToken } from "@/lib/share";
+import { publicOrigin } from "@/lib/public-origin"
 
 const DAYS = new Set([1, 7, 30, 365]);
 
@@ -38,5 +39,5 @@ export async function POST(req: NextRequest) {
     return jsonError("Invalid share target", 400);
   }
 
-  return NextResponse.json({ url: `${req.nextUrl.origin}/share/${token}`, expiresAt: new Date(exp).toISOString() });
+  return NextResponse.json({ url: `${publicOrigin(req)}/share/${token}`, expiresAt: new Date(exp).toISOString() });
 }

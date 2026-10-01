@@ -1,13 +1,13 @@
-import {enqueueStorageCleanup} from "@/lib/storage-cleanup";
+import { drizzle } from "drizzle-orm/node-postgres";
+import * as receiptSchema from "@/lib/db/schema";
 import {
   libraryOwnership,
   assertFolderActive,
   ensureFolder,
   assertLibraryAccess,
 } from "@/lib/library";
-import { UTApi } from "uploadthing/server";
-import { createUploadthing, type FileRouter } from "uploadthing/next";
-import { UploadThingError } from "uploadthing/server";
+import { createUploadthing, type FileRouter } from "@/lib/gcs/router.mjs";
+import { UploadThingError } from "@/lib/gcs/router.mjs";
 import { db } from "@/lib/db";
 import {
   assets,
@@ -66,8 +66,8 @@ export const ourFileRouter = {
         ownerUserId: session.ownerUserId,
       };
     })
-    .onUploadComplete(async ({ metadata, file }) => {
-      try {
+    .onUploadComplete(async ({ metadata, file, transaction }) => {
+      const db = drizzle(transaction, { schema: receiptSchema });
       const [validSession] = await db
         .select()
         .from(uploadSessions)
@@ -80,7 +80,6 @@ export const ourFileRouter = {
         metadata.userId,
         metadata.folder,
       );
-      await new UTApi().updateACL(file.key, "private");
       const [row] = await db
         .insert(assets)
         .values({
@@ -112,7 +111,6 @@ export const ourFileRouter = {
         .where(eq(uploadSessions.id, metadata.tokenId));
 
       return { assetId: row.id };
-      }catch(error){ await enqueueStorageCleanup([file.key]); throw error; }
     }),
 
   assetUploader: f({
@@ -136,15 +134,14 @@ export const ourFileRouter = {
       await ensureFolder(tenant.id, viewer.id, folder);
       return { userId: viewer.id, tenantId: tenant.id, folder };
     })
-    .onUploadComplete(async ({ metadata, file }) => {
-      try {
+    .onUploadComplete(async ({ metadata, file, transaction }) => {
+      const db = drizzle(transaction, { schema: receiptSchema });
       await assertUploadOwner(metadata.tenantId, metadata.userId, metadata.folder);
       await assertFolderActive(
         metadata.tenantId,
         metadata.userId,
         metadata.folder,
       );
-      await new UTApi().updateACL(file.key, "private");
       const [row] = await db
         .insert(assets)
         .values({
@@ -169,7 +166,6 @@ export const ourFileRouter = {
         .returning({ id: assets.id });
 
       return { assetId: row.id };
-      }catch(error){ await enqueueStorageCleanup([file.key]); throw error; }
     }),
 } satisfies FileRouter;
 
