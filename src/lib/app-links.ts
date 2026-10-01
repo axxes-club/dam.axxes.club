@@ -26,15 +26,15 @@ export type AppLinkTarget = {
 }
 
 const withTenant = (path: string, tenantId?: string | null) =>
-  tenantId ? `${path}?tenant=${tenantId}` : path
+  tenantId ? `${path}${path.includes("?") ? "&" : "?"}tenant=${encodeURIComponent(tenantId)}` : path
 
 export const APP_LINK_TARGETS: Record<string, AppLinkTarget> = {
   office: {
     name: "AXXES Office",
-    base: "https://quill.axxes.club",
-    url: (id, tenant) => withTenant(`https://quill.axxes.club/d/${id}`, tenant),
-    quickLook: (id, tenant) => withTenant(`https://quill.axxes.club/quicklook/${id}`, tenant),
-    openUnlinked: (assetId, tenant) => withTenant(`https://quill.axxes.club/open?asset=${assetId}`, tenant),
+    base: "https://axxes.work",
+    url: (id, tenant) => withTenant(`https://axxes.work/d/${id}`, tenant),
+    quickLook: (id, tenant) => withTenant(`https://axxes.work/quicklook/${id}`, tenant),
+    openUnlinked: (assetId, tenant) => withTenant(`https://axxes.work/open?asset=${assetId}`, tenant),
   },
   lanes: {
     name: "Lanes",
