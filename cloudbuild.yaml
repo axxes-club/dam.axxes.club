@@ -89,6 +89,20 @@
       ]
     },
     {
+      "id": "active-source-schema-readiness",
+      "name": "gcr.io/cloud-builders/docker",
+      "args": [
+        "run",
+        "--rm",
+        "-v",
+        "/workspace/.env.production:/run/secrets/build-env:ro",
+        "ci-check:$BUILD_ID",
+        "node",
+        "scripts/schema-readiness.cjs",
+        "dam"
+      ]
+    },
+    {
       "id": "remove-build-inputs",
       "name": "gcr.io/google.com/cloudsdktool/cloud-sdk:slim",
       "entrypoint": "bash",
