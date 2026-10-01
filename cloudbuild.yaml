@@ -17,11 +17,16 @@
       "name": "gcr.io/cloud-builders/docker",
       "args": [
         "build",
+        "--secret",
+        "id=build-env,src=.env.production",
         "--target",
         "build",
         "-t",
         "ci-check:$BUILD_ID",
         "."
+      ],
+      "env": [
+        "DOCKER_BUILDKIT=1"
       ]
     },
     {
@@ -29,9 +34,43 @@
       "name": "gcr.io/cloud-builders/docker",
       "args": [
         "build",
+        "--secret",
+        "id=build-env,src=.env.production",
         "-t",
         "us-west1-docker.pkg.dev/$PROJECT_ID/ci-dam/dam:${_TAG}-$BUILD_ID",
         "."
+      ],
+      "env": [
+        "DOCKER_BUILDKIT=1"
+      ]
+    },
+    {
+      "id": "export-runtime-layers",
+      "name": "gcr.io/cloud-builders/docker",
+      "args": [
+        "save",
+        "-o",
+        ".ci-image.tar",
+        "us-west1-docker.pkg.dev/$PROJECT_ID/ci-dam/dam:${_TAG}-$BUILD_ID"
+      ]
+    },
+    {
+      "id": "verify-no-secret-layers",
+      "name": "gcr.io/google.com/cloudsdktool/cloud-sdk:slim",
+      "entrypoint": "python3",
+      "args": [
+        "scripts/gcp-scan-image.py",
+        ".ci-image.tar",
+        ".env.production"
+      ]
+    },
+    {
+      "id": "remove-build-inputs",
+      "name": "gcr.io/google.com/cloudsdktool/cloud-sdk:slim",
+      "entrypoint": "bash",
+      "args": [
+        "-ec",
+        "rm -f .ci-image.tar .env.production"
       ]
     },
     {
