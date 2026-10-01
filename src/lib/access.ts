@@ -33,7 +33,7 @@ export async function getViewer(headers: Headers): Promise<Viewer | null> {
         settings: tenants.settings,
       })
       .from(tenants)
-      .where(isNull(tenants.deletedAt))
+      .where(and(isNull(tenants.deletedAt), eq(tenants.status, "active")))
       .orderBy(asc(tenants.name));
     tenantList = all
       .filter((t) => foldersEnabled(t.settings))
@@ -59,6 +59,7 @@ export async function getViewer(headers: Headers): Promise<Viewer | null> {
           eq(tenantMemberships.userId, session.user.id),
           isNull(tenantMemberships.deletedAt),
           isNull(tenants.deletedAt),
+          eq(tenants.status, "active"),
         ),
       )
       .orderBy(asc(tenants.name));

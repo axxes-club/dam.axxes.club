@@ -67,6 +67,7 @@ export type Account = typeof account.$inferSelect
 // Shared AXXES platform tables (owned by the members portal — mapped here, never migrated from this app)
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey(),
+  status: text("status").notNull(),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
   settings: jsonb("settings").$type<{ features?: Record<string, boolean> } & Record<string, unknown>>().default({}),
