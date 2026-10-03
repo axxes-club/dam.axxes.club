@@ -6,6 +6,12 @@ export class StorageError extends Error {
     this.status = status;
   }
 }
+// Old issued handoff receipts predate creator attribution; retain their owner binding.
+export function boundMetadataMatches(record,current) {
+ const metadata={...current};
+ if(!record.quota && record.metadata?.chargingUserId===undefined)delete metadata.chargingUserId;
+ return isDeepStrictEqual(metadata,record.metadata??{});
+}
 const fail = (message, status) => {
   throw new StorageError(message, status);
 };
@@ -178,7 +184,7 @@ export class Adapter {
     if (!["private", "public"].includes(route.visibility))
       fail("Explicit visibility required");
     await this.store.assertPrivate();
-    const results = [];
+    const records = [];
     for (const descriptor of files) {
       const id = randomUUID(),
         suffix = `${this.app}/${digest}/${id}`,
@@ -209,16 +215,30 @@ export class Adapter {
         maxExpiresAt: this.now() + 24 * 60 * 60 * 1000,
         expiresAt: this.now() + 15 * 60 * 1000,
       };
-      await this.registry.create(record);
-      const policy = await this.store.signPost(
-        staging,
-        record.descriptor,
-        objectMetadata,
-        record.expiresAt,
-      );
-      results.push({ uploadId: id, policy });
+      records.push(record);
+    }
+    if(this.registry.createBatch) await this.registry.createBatch(records);
+    else for(const record of records) await this.registry.create(record);
+    const results=[];
+    for(const record of records) {
+      const policy=await this.store.signPost(record.staging,record.descriptor,record.objectMetadata,record.expiresAt);
+      results.push({uploadId:record.id,policy});
     }
     return results;
+  }
+  async cancel(request,ids,input) {
+    this.checkOrigin(request);
+    if(!Array.isArray(ids)||ids.length>100||ids.some(id=>typeof id!=="string"||!/^[a-f0-9-]{36}$/.test(id)))fail("Invalid upload identifiers");
+    const records=[];
+    for(const id of [...new Set(ids)]) {
+      const record=await this.registry.get(id);
+      if(!record||record.app!==this.app)fail("No such upload",404);
+      const route=this.routes[record.route];if(!route)fail("Upload route removed",404);
+      const authorization=await route.authorize(request,input,{phase:record.result!=null?"replay":"continue"});
+      if(authorization.owner!==record.owner||!boundMetadataMatches(record,authorization.metadata??{}))fail("Upload owner mismatch",403);
+      records.push(record);
+    }
+    return {cancelled:this.registry.cancelBatch?await this.registry.cancelBatch(records):0};
   }
   async renew(request, id, input) {
     this.checkOrigin(request);
@@ -231,7 +251,7 @@ export class Adapter {
     const authorization = await route.authorize(request, input, {
       phase: record.result != null ? "replay" : "continue",
     });
-    if (!isDeepStrictEqual(authorization.metadata ?? {}, record.metadata))
+    if (!boundMetadataMatches(record,authorization.metadata ?? {}))
       fail("Upload metadata mismatch", 403);
     if (authorization.owner !== record.owner)
       fail("Upload owner mismatch", 403);
@@ -262,7 +282,7 @@ export class Adapter {
     const authorization = await route.authorize(request, input, {
       phase: record.result != null ? "replay" : "continue",
     });
-    if (!isDeepStrictEqual(authorization.metadata ?? {}, record.metadata))
+    if (!boundMetadataMatches(record,authorization.metadata ?? {}))
       fail("Upload metadata mismatch", 403);
     if (authorization.owner !== record.owner)
       fail("Upload owner mismatch", 403);

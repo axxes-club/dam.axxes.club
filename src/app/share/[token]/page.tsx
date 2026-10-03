@@ -1,3 +1,4 @@
+import { libraryScope,assetVisibleCondition } from "@/lib/library";
 import {sharedAssetUrl} from "@/lib/gcs/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -21,22 +22,22 @@ export default async function SharePage({ params }: { params: { token: string } 
   const payload = verifyShareToken(params.token);
   if (!payload) return <Unavailable />;
 
-  const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, payload.t));
+  const tenant=payload.t==="personal"?{name:"Personal library"}:(await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, payload.t)))[0];
   if (!tenant) notFound();
 
   let items: Asset[];
   if (payload.k === "asset") {
-    const rows = await db.select().from(assets).where(and(eq(assets.id, payload.id), eq(assets.tenantId, payload.t)));
-    items = rows.map((row) => toAsset(row));
+    const rows = await db.select().from(assets).where(and(eq(assets.id, payload.id), libraryScope(payload.t,payload.u??""),assetVisibleCondition()));
+    items = rows.map((row) => ({...toAsset(row),url:`/api/share/${params.token}/assets/${row.id}`,thumbnailUrl:null}));
     if (!items.length) return <Unavailable />;
   } else {
     const rows = await db
       .select()
       .from(assets)
-      .where(and(eq(assets.tenantId, payload.t), eq(assets.folder, payload.f)))
+      .where(and(libraryScope(payload.t,payload.u??""),assetVisibleCondition(), eq(assets.folder, payload.f)))
       .orderBy(asc(assets.name))
       .limit(FOLDER_LIMIT);
-    items = rows.map((row) => toAsset(row));
+    items = rows.map((row) => ({...toAsset(row),url:`/api/share/${params.token}/assets/${row.id}`,thumbnailUrl:null}));
   }
 
   items = items.map(asset => ({ ...asset, url: sharedAssetUrl(asset.url, params.token)!, thumbnailUrl: sharedAssetUrl(asset.thumbnailUrl, params.token) }));

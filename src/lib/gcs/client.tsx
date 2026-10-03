@@ -9,7 +9,7 @@ type Uploaded = {
   type: string;
   url: string;
   ufsUrl: string;
-  serverData: Record<string, unknown>;
+  serverData: unknown;
 };
 type Options = {
   onUploadBegin?: (fileName: string) => void;

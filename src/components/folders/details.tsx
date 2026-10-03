@@ -5,11 +5,16 @@ import { format } from "date-fns";
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, ExternalLink, Link2, Loader2, Share2, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { appTarget } from "@/lib/app-links";
 import type { Asset } from "@/lib/types";
 import { api, downloadAsset, formatBytes, notify, Thumb, TypeIcon } from "./utils";
 
+import { expirationPatch, lifecycleStatus, localDateInput } from "./lifecycle";
+
 interface DetailsProps {
   asset: Asset;
+  ownerLabel?: string;
+  uploaderLabel?: string;
   folders: string[];
   canWrite: boolean;
   canDelete: boolean;
@@ -18,18 +23,21 @@ interface DetailsProps {
   onPreview: () => void;
   onShare: () => void;
   onDelete: () => void;
+  onTransfer?: () => void;
 }
 
-export function DetailsPanel({ asset, folders, canWrite, canDelete, onClose, onSaved, onPreview, onShare, onDelete }: DetailsProps) {
+export function DetailsPanel({ asset, ownerLabel, uploaderLabel, folders, canWrite, canDelete, onClose, onSaved, onPreview, onShare, onDelete, onTransfer }: DetailsProps) {
   const [name, setName] = React.useState(asset.name);
   const [folder, setFolder] = React.useState(asset.folder ?? "");
   const [tags, setTags] = React.useState(asset.tags);
   const [tagDraft, setTagDraft] = React.useState("");
   const [description, setDescription] = React.useState(asset.description ?? "");
   const [altText, setAltText] = React.useState(asset.altText ?? "");
+  const [expiresAt, setExpiresAt] = React.useState(localDateInput(asset.expiresAt));
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
+    setExpiresAt(localDateInput(asset.expiresAt));
     setName(asset.name);
     setFolder(asset.folder ?? "");
     setTags(asset.tags);
@@ -39,6 +47,7 @@ export function DetailsPanel({ asset, folders, canWrite, canDelete, onClose, onS
   }, [asset]);
 
   const dirty =
+    (canDelete && expiresAt !== localDateInput(asset.expiresAt)) ||
     name !== asset.name ||
     folder !== (asset.folder ?? "") ||
     description !== (asset.description ?? "") ||
@@ -57,7 +66,7 @@ export function DetailsPanel({ asset, folders, canWrite, canDelete, onClose, onS
       onSaved(
         await api<Asset>(`/api/assets/${asset.id}`, {
           method: "PATCH",
-          body: { name, folder: folder || null, tags, description, altText },
+          body: { name, folder: folder || null, tags, description, altText, ...expirationPatch(localDateInput(asset.expiresAt), expiresAt, canDelete) },
         })
       );
       notify.success("Changes saved");
@@ -75,7 +84,7 @@ export function DetailsPanel({ asset, folders, canWrite, canDelete, onClose, onS
 
   return (
     <aside
-      className="flex w-[22rem] shrink-0 flex-col overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border"
+      className="fixed inset-3 z-40 flex md:static md:w-[22rem] shrink-0 flex-col overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-border"
       onContextMenu={(e) => e.stopPropagation()}
       aria-label="File details"
     >
@@ -111,8 +120,14 @@ export function DetailsPanel({ asset, folders, canWrite, canDelete, onClose, onS
           </Button>
         </div>
 
+        {asset.source !== "upload" && <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">External link. The original is hosted elsewhere; removing or expiring this record cannot revoke the original URL.</p>}
+        {canDelete && onTransfer && <Button className="mt-3 w-full" variant="outline" onClick={onTransfer}>Transfer ownership…</Button>}
         <Section title="File details">
           <dl className="grid gap-3 text-sm">
+            <Row label="Owner">{ownerLabel ?? asset.ownerName ?? (asset.tenantId ? "Workspace" : "Personal")}</Row>
+            <Row label="Uploaded by">{uploaderLabel ?? asset.uploadedByName ?? asset.uploadedById ?? "Legacy upload"}</Row>
+            <Row label="Lifecycle">{lifecycleStatus(asset)}</Row>
+            <Row label="Used in apps">{asset.appLinks?.length ? <ul className="grid gap-1">{asset.appLinks.map(l => { const target = appTarget(l.appKey); return <li key={`${l.appKey}:${l.recordId}`}>{target ? <a className="text-primary underline underline-offset-2" href={target.url(l.recordId, asset.tenantId)} target="_blank" rel="noopener noreferrer">{target.name} · {l.recordId}</a> : `${l.appKey} · ${l.recordId}`}</li>; })}</ul> : "No app attachments"}</Row>
             <Row label="Type">{asset.mimeType ?? asset.type}</Row>
             <Row label="Size">{formatBytes(asset.size)}</Row>
             {asset.width && asset.height ? <Row label="Dimensions">{asset.width} × {asset.height}</Row> : null}
@@ -126,6 +141,10 @@ export function DetailsPanel({ asset, folders, canWrite, canDelete, onClose, onS
         {canWrite ? (
           <Section title="Edit">
             <div className="grid gap-3">
+              {canDelete && <Field label="Expiration (your local time)">
+                <Input aria-label="File expiration" type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} />
+                <p className="text-xs text-muted-foreground">Leave blank to keep indefinitely. Expiration removes access in linked apps and moves the file to Trash.</p>
+              </Field>}
               <Field label="Name">
                 <Input value={name} onChange={(e) => setName(e.target.value)} />
               </Field>
@@ -239,6 +258,8 @@ export function Preview({
   onClose: () => void;
 }) {
   const asset = index != null ? assets[index] : null;
+  const [imageFailed,setImageFailed]=React.useState(false);
+  React.useEffect(()=>setImageFailed(false),[asset?.id,asset?.url]);
 
   React.useEffect(() => {
     if (index == null) return;
@@ -278,9 +299,9 @@ export function Preview({
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-16 pb-8" onClick={onClose}>
         <div className="flex max-h-full max-w-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
-          {asset.type === "image" ? (
+          {asset.type === "image" && imageFailed ? (<div role="status" className="rounded-xl bg-white/10 p-8 text-center"><p className="font-medium">Image unavailable</p><p className="mt-2 text-sm text-white/70">It may have expired, moved to Trash, or no longer be shared with you.</p><Button variant="outline" className="mt-4" onClick={()=>setImageFailed(false)}>Retry</Button></div>) : asset.type === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={asset.url} alt={asset.altText ?? asset.name} className="max-h-[calc(100vh-8rem)] max-w-full rounded-lg object-contain" />
+            <img onError={()=>setImageFailed(true)} src={asset.url} alt={asset.altText ?? asset.name} className="max-h-[calc(100vh-8rem)] max-w-full rounded-lg object-contain" />
           ) : asset.type === "video" ? (
             <video key={asset.id} src={asset.url} controls autoPlay className="max-h-[calc(100vh-8rem)] max-w-full rounded-lg" />
           ) : asset.mimeType === "application/pdf" ? (
@@ -289,7 +310,7 @@ export function Preview({
               asset.mimeType === "application/msword" ||
               asset.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
               asset.mimeType === "application/vnd.ms-powerpoint" ? (
-            <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(asset.url)}`} title={asset.name} className="h-[calc(100vh-8rem)] w-[min(900px,90vw)] rounded-lg bg-white" />
+            asset.url.startsWith("http") ? <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(asset.url)}`} title={asset.name} className="h-[calc(100vh-8rem)] w-[min(900px,90vw)] rounded-lg bg-white" /> : <div className="rounded-xl bg-white/10 p-8 text-center"><p>Download this document to view it.</p><Button className="mt-4" onClick={()=>downloadAsset(asset)}>Download</Button></div>
           ) : asset.mimeType?.startsWith("audio/") ? (
             <audio key={asset.id} src={asset.url} controls autoPlay />
           ) : (

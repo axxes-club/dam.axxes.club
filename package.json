@@ -7,8 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "tsx --test src/lib/*.test.ts src/lib/apps/*.test.ts src/components/folders/*.test.ts",
     "test:storage": "node --test scripts/gcs/*.check.mjs",
-    "test:office-domain": "tsx --test tests/office-links-domain.test.ts"
+    "test:office-domain": "tsx --test tests/office-links-domain.test.ts",
+    "test:quota": "node --test scripts/gcs/*.check.mjs",
+    "test:quota-ui": "node --test scripts/storage/*.check.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -35,6 +38,7 @@
     "uploadthing": "^7.7.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^20",
     "@types/pg": "8.23.1",

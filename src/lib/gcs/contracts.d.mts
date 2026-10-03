@@ -1,0 +1,9 @@
+export type Metadata = Record<string, unknown> & {userId?:string;eventId?:string;subject?:string;tenantId?:string;tokenId?:string;guestId?:string;sessionId?:string};
+export type Descriptor = {name:string;type:string;size:number};
+export type StoredFile = {size:string|number;contentType?:string;generation:string;metadata?:Record<string,string>};
+export type UploadedFile = Descriptor & {key:string;url:string;ufsUrl:string;generation:string;serverData?:unknown};
+export type Receipt = {id:string;app:string;route:string;owner:string;descriptor:Descriptor;metadata:Metadata;staging:string;key:string;objectMetadata:Record<string,string>;createdAt:number;maxExpiresAt?:number;expiresAt:number;result?:UploadedFile|null};
+export type PostPolicy = {url:string;fields:Record<string,string>};
+export type Store = {assertPrivate():Promise<void>;signPost(key:string,file:Descriptor,metadata:Record<string,string>,expires:number):Promise<PostPolicy>;stat(key:string):Promise<StoredFile|null>;freeze(from:string,to:string,generation:string,metadata:Record<string,string>,contentType:string):Promise<StoredFile>;readUrl(key:string,generation:string,expires:number):Promise<string>;delete(key:string,generation:string):Promise<void>};
+export type Registry<Transaction = unknown> = {create(record:Receipt):Promise<void>;get(id:string):Promise<Receipt|null>;renewOnce(id:string,owner:string,run:(record:Receipt,transaction:Transaction)=>Promise<unknown>):Promise<unknown>;completeOnce(id:string,owner:string,run:(record:Receipt,transaction:Transaction)=>Promise<UploadedFile>):Promise<UploadedFile>};
+export type CompiledRoute<Transaction = unknown> = {files:Record<string,{bytes:number;count:number}>;visibility:string;authorize(request:Request,input:unknown,context:{phase:'init'|'continue'|'replay'}):Promise<{owner:string;metadata:Metadata}>;complete(args:{metadata:Metadata;file:UploadedFile;uploadId:string;transaction:Transaction}):Promise<unknown>};

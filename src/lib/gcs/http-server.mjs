@@ -1,3 +1,4 @@
+import { QuotaError } from "../storage/quota.mjs";
 import { StorageError } from "./core.mjs";
 async function jsonBody(request) {
   const reader = request.body?.getReader();
@@ -30,11 +31,12 @@ export function handlers(
     } catch (e) {
       return Response.json(
         {
+          ...(e instanceof QuotaError ? {code:e.code,...e.details} : {}),
           error:
-            e instanceof StorageError ? e.message : "Storage request failed",
+            e instanceof StorageError || e instanceof QuotaError ? e.message : "Storage request failed",
         },
         {
-          status: e instanceof StorageError ? e.status : 500,
+          status: e instanceof StorageError || e instanceof QuotaError ? e.status : 500,
           headers: { "Cache-Control": "no-store" },
         },
       );
@@ -48,6 +50,8 @@ export function handlers(
           ? await adapter.init(request, body.route, body.files, body.input)
           : body.action === "complete"
             ? await adapter.complete(request, body.uploadId, body.input)
+            : body.action === "cancel"
+              ? await adapter.cancel(request,body.uploadIds,body.input)
             : body.action === "renew"
               ? await adapter.renew(request, body.uploadId, body.input)
               : (() => {

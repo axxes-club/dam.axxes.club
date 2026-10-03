@@ -59,11 +59,18 @@ export function toAsset(row: AssetRow, appLinks?: AssetAppLink[]): Asset {
   return {
     id: row.id,
     tenantId: row.tenantId,
+    ownerUserId: row.ownerUserId,
+    uploadedById: row.uploadedById,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    trashedAt: row.trashedAt?.toISOString() ?? null,
+    trashReason: row.trashReason,
+    appKey: row.appKey,
+    storageKey: null,
     name: row.name,
     description: row.description,
     altText: row.altText,
-    url: row.url,
-    thumbnailUrl: row.thumbnailUrl,
+    url: assetDisplayUrl(row),
+    thumbnailUrl: assetTypeOf(row.mimeType, row.category) === "image" ? assetDisplayUrl(row) : null,
     mimeType: row.mimeType,
     size: row.fileSize,
     width: row.width,
@@ -98,4 +105,12 @@ export function normalizeTags(value: unknown): string[] {
 export function uploadthingKey(url: string): string | null {
   const match = url.match(/\/f\/([^/?#]+)/);
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+/** Hosted bytes require authenticated delivery; external links remain owned by their host. */
+export function assetDisplayUrl(row: {id:string;source:string|null;storageKey:string|null;url:string}):string {
+ if (row.source !== "upload" && !row.storageKey) {
+  try {const parsed = new URL(row.url);if (parsed.protocol === "https:" || parsed.protocol === "http:") return row.url;} catch {}
+ }
+ return `/api/assets/${row.id}/delivery`;
 }

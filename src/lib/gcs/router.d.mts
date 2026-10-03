@@ -1,4 +1,6 @@
-export type FileRouter = Record<string, Builder<any, any>>;
+import type {PoolClient} from "pg";
+import type {CompiledRoute,Metadata} from "./contracts.mjs";
+export type FileRouter = Record<string, {files:Limits}>;
 type File = {
   key: string;
   name: string;
@@ -23,17 +25,17 @@ type Builder<I, M> = {
     fn: (value: {
       metadata: M;
       file: File;
-      transaction: any;
+      transaction: PoolClient;
       uploadId: string;
-    }) => Promise<any>,
+    }) => Promise<unknown>,
   ): Builder<I, M>;
 };
-export function createUploadthing(): (files: Limits) => Builder<any, any>;
+export function createUploadthing(): (files: Limits) => Builder<unknown, Metadata>;
 export function compileRouter(
   router: FileRouter,
   visibility: Record<string, string>,
-): any;
+): Record<string, CompiledRoute<PoolClient>>;
 export class UploadThingError extends Error {
   constructor(message: string);
 }
-export function principalOwner(metadata: Record<string, any>): string;
+export function principalOwner(metadata: Metadata): string;

@@ -1,3 +1,4 @@
+import { libraryScope, assetVisibleCondition, assertFolderActive } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -25,14 +26,15 @@ export async function POST(req: NextRequest) {
     const [row] = await db
       .select({ id: assets.id })
       .from(assets)
-      .where(and(eq(assets.id, String(body.target.id)), eq(assets.tenantId, tenantId)))
+      .where(and(eq(assets.id, String(body.target.id)), assetVisibleCondition(), libraryScope(tenantId,access.viewer.id)))
       .catch(() => []);
     if (!row) return jsonError("File not found", 404);
-    token = createShareToken({ k: "asset", t: tenantId, id: row.id, exp });
+    token = createShareToken({ k: "asset", t: tenantId, u: access.viewer.id, id: row.id, exp });
   } else if (body?.target?.kind === "folder") {
     const folder = normalizeFolder(body.target.folder);
     if (!folder) return jsonError("Folder is required", 400);
-    token = createShareToken({ k: "folder", t: tenantId, f: folder, exp });
+    await assertFolderActive(tenantId,access.viewer.id,folder);
+    token = createShareToken({ k: "folder", t: tenantId, u: access.viewer.id, f: folder, exp });
   } else {
     return jsonError("Invalid share target", 400);
   }

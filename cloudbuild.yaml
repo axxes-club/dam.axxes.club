@@ -38,7 +38,7 @@
         "ci-check:$BUILD_ID",
         "sh",
         "-ec",
-        "rm -f .env .env.*; npm run test:office-domain && npm run test:storage"
+        "rm -f .env .env.* && npm run test:office-domain && npm run test:storage && npm test && npm run test:quota-ui"
       ]
     },
     {
@@ -48,9 +48,9 @@
         "run",
         "--rm",
         "ci-check:$BUILD_ID",
-        "npm",
-        "run",
-        "test:storage"
+        "sh",
+        "-ec",
+        "node --test scripts/schema-readiness.check.cjs && npm run test:storage"
       ]
     },
     {
@@ -89,12 +89,39 @@
       ]
     },
     {
+      "id": "install-schema-proxy",
+      "name": "gcr.io/cloud-builders/docker",
+      "entrypoint": "sh",
+      "args": [
+        "-ec",
+        "docker create --name schema-proxy-binary gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.26.0 >/dev/null; trap \"docker rm -f schema-proxy-binary >/dev/null\" EXIT; docker cp schema-proxy-binary:/cloud-sql-proxy /workspace/.ci-cloud-sql-proxy; chmod 755 /workspace/.ci-cloud-sql-proxy"
+      ]
+    },
+    {
+      "id": "active-source-schema-readiness",
+      "name": "gcr.io/cloud-builders/docker",
+      "args": [
+        "run",
+        "--rm",
+        "--network",
+        "cloudbuild",
+        "-v",
+        "/workspace/.env.production:/run/secrets/build-env:ro",
+        "-v",
+        "/workspace/.ci-cloud-sql-proxy:/run/cloudsql-proxy:ro",
+        "ci-check:$BUILD_ID",
+        "node",
+        "scripts/schema-readiness.cjs",
+        "dam"
+      ]
+    },
+    {
       "id": "remove-build-inputs",
       "name": "gcr.io/google.com/cloudsdktool/cloud-sdk:slim",
       "entrypoint": "bash",
       "args": [
         "-ec",
-        "rm -f .ci-image.tar .env.production"
+        "rm -f .ci-image.tar .env.production .ci-cloud-sql-proxy"
       ]
     },
     {
