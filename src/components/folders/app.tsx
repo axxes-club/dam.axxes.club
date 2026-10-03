@@ -1,4 +1,5 @@
 "use client";
+import { FoldersPulse } from "./pulse";
 
 import { AllAppsSwitcher } from "@/components/all-apps-switcher";
 import type { CustomerBrand } from "@/lib/white-label";
@@ -610,6 +611,7 @@ function FoldersAppInner({ viewer, handshakeUrl, initialTenantId }: { viewer: Vi
 
   return (
     <div className="flex h-dvh bg-sidebar text-foreground">
+      <FoldersPulse tenantId={tenant.id}/>
       {/* ── Sidebar ── */}
       <aside data-collapsed={sidebarCollapsed} className={cn("group/sidebar hidden shrink-0 flex-col px-3 pb-3 transition-[width] md:flex", sidebarCollapsed ? "w-16" : "w-64")} aria-label="Navigation">
         <div className={cn("flex h-16 items-center", sidebarCollapsed ? "justify-center" : "px-3")}>
