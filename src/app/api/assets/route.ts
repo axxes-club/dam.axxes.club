@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   if ("error" in access) return access.error;
 
   const page = await queryAssets(access.tenant.id, {
+    recursive: params.get("recursive")==="1",
     q: params.get("q") ?? undefined,
     type: params.get("type") as AssetType | null,
     folder: params.get("folder"),

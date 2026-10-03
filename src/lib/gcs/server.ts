@@ -18,6 +18,7 @@ const baseUrl = (
 const origins = Array.from(
   new Set([
     baseUrl,
+    "https://folders.axxes.app",
     "https://folders.axxes.club",
     ...(process.env.GCS_ASSETS_ALLOWED_ORIGINS || "")
       .split(",")

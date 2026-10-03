@@ -1,22 +1,18 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
+import { foldersAuthConfig } from './folders-auth-config';
 
 // With Handshake (handshake.axxes.club), every *.axxes.club app shares one session cookie
-const cookieDomain = process.env.AUTH_COOKIE_DOMAIN;
-const parent = (cookieDomain || "axxes.club").replace(/^\./, "");
+const settings = foldersAuthConfig(process.env);
+const cookieDomain = settings.cookieDomain;
+export const AUTH_ORIGIN = settings.baseURL;
 
 // Sign-in works from AXXES domains and the project's own Vercel URLs
-const trustedOrigins = [
-  `https://${parent}`,
-  `https://*.${parent}`,
-  ...(process.env.NODE_ENV !== "production" ? [`http://*.${parent}:*`] : []),
-  process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`,
-  process.env.VERCEL_BRANCH_URL && `https://${process.env.VERCEL_BRANCH_URL}`,
-  process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
-].filter((origin): origin is string => Boolean(origin));
+const trustedOrigins = settings.trustedOrigins;
 
 export const auth = betterAuth({
+  baseURL: AUTH_ORIGIN,
   database: drizzleAdapter(db, {
     provider: "pg",
   }),
