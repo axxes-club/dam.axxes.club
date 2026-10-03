@@ -1,3 +1,4 @@
+import {organizationId} from "./organization-id";
 import { cache } from "react"
 import { sql } from "drizzle-orm"
 import { db } from "@/lib/db"
@@ -32,6 +33,7 @@ const url = (v: unknown) => {
 }
 
 export const getCustomerBrand = cache(async (tenantId: string): Promise<CustomerBrand | null> => {
+  if(!organizationId(tenantId))return null;
   try {
     const result = await db.execute(sql`
       select t.name, t.settings -> 'whiteLabel' ->> 'slug' as slug, t.logo_url as tenant_logo, t.primary_color as tenant_color,
