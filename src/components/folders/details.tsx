@@ -1,4 +1,5 @@
 "use client";
+import {previewKind} from "@/lib/preview-kind";
 
 import * as React from "react";
 import { format } from "date-fns";
@@ -299,26 +300,17 @@ export function Preview({
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-16 pb-8" onClick={onClose}>
         <div className="flex max-h-full max-w-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
-          {asset.type === "image" && imageFailed ? (<div role="status" className="rounded-xl bg-white/10 p-8 text-center"><p className="font-medium">Image unavailable</p><p className="mt-2 text-sm text-white/70">It may have expired, moved to Trash, or no longer be shared with you.</p><Button variant="outline" className="mt-4" onClick={()=>setImageFailed(false)}>Retry</Button></div>) : asset.type === "image" ? (
+          {previewKind(asset) === "image" && imageFailed ? (<div role="status" className="rounded-xl bg-white/10 p-8 text-center"><p>Image unavailable</p><Button className="mt-4" onClick={()=>setImageFailed(false)}>Retry</Button></div>) : previewKind(asset) === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img onError={()=>setImageFailed(true)} src={asset.url} alt={asset.altText ?? asset.name} className="max-h-[calc(100vh-8rem)] max-w-full rounded-lg object-contain" />
-          ) : asset.type === "video" ? (
-            <video key={asset.id} src={asset.url} controls autoPlay className="max-h-[calc(100vh-8rem)] max-w-full rounded-lg" />
-          ) : asset.mimeType === "application/pdf" ? (
-            <iframe src={asset.url} title={asset.name} className="h-[calc(100vh-8rem)] w-[min(900px,90vw)] rounded-lg bg-white" />
-          ) : asset.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || 
-              asset.mimeType === "application/msword" ||
-              asset.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-              asset.mimeType === "application/vnd.ms-powerpoint" ? (
-            asset.url.startsWith("http") ? <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(asset.url)}`} title={asset.name} className="h-[calc(100vh-8rem)] w-[min(900px,90vw)] rounded-lg bg-white" /> : <div className="rounded-xl bg-white/10 p-8 text-center"><p>Download this document to view it.</p><Button className="mt-4" onClick={()=>downloadAsset(asset)}>Download</Button></div>
-          ) : asset.mimeType?.startsWith("audio/") ? (
-            <audio key={asset.id} src={asset.url} controls autoPlay />
+          ) : previewKind(asset) === "video" ? (
+            <video key={asset.id} src={asset.url} controls className="max-h-[calc(100vh-8rem)] max-w-full rounded-lg" />
+          ) : previewKind(asset) === "audio" ? (
+            <audio key={asset.id} src={asset.url} controls />
+          ) : ["pdf","office","text","native"].includes(previewKind(asset)) ? (
+            <iframe key={asset.id} src={`/api/assets/${asset.id}/preview`} title={asset.name} className="h-[calc(100vh-8rem)] w-[min(1100px,90vw)] rounded-lg bg-white" />
           ) : (
-            <div className="flex flex-col items-center gap-4 rounded-2xl bg-white/5 p-10">
-              <TypeIcon asset={asset} className="size-16" />
-              <p className="text-white/70">No preview available</p>
-              <Button onClick={() => downloadAsset(asset)} className="rounded-full"><Download /> Download</Button>
-            </div>
+            <div className="flex flex-col items-center gap-4 rounded-2xl bg-white/5 p-10"><TypeIcon asset={asset} className="size-16" /><p>This format requires its original app.</p><Button onClick={()=>downloadAsset(asset)}>Download original</Button></div>
           )}
         </div>
         {index > 0 && (

@@ -6,6 +6,7 @@ import {getViewerById} from '../access'
 import {assertLibraryAccess,authorizeAsset,libraryScope,folderScope,ensureFolder,assetVisibleCondition,sharedFolderDestinations} from '../library'
 import {normalizeFolder} from '../assets'
 import {deliverAsset} from '../delivery'
+import {previewAsset} from '../asset-preview'
 import {MUTATING_OPERATIONS,verifyFoldersRequest} from './auth'
 import type {FolderCapabilities,FolderAsset} from './contracts'
 import type {Viewer} from '../types'
@@ -70,16 +71,18 @@ async function dispatch(viewer:Viewer,envelope:import('./auth').SignedFoldersReq
   const page=rows.slice(0,limit)
   return json({items:page.map(row=>({id:row.id,path:row.path,trashedAt:row.trashedAt?.toISOString()??null,expiresAt:row.expiresAt?.toISOString()??null,capabilities:capabilities(access)})),nextCursor:rows.length>limit?page.at(-1)!.path:null})
  }
- if(operation==='authorize'||operation==='delivery'){
-  const input=z.object({assetId:uuid,need:z.enum(['read','write','delete']).default('read')}).parse(payload)
-  const asset=await authorizeAsset(viewer,input.assetId,operation==='delivery'?'read':input.need)
+ if(operation==='authorize'||operation==='delivery'||operation==='preview'){
+  const input=z.object({assetId:uuid,need:z.enum(['read','write','delete']).default('read'),range:z.string().regex(/^bytes=\d*-\d*$/).optional()}).parse(payload)
+  const asset=await authorizeAsset(viewer,input.assetId,operation==='delivery'||operation==='preview'?'read':input.need)
   const actualLibrary=asset.tenantId??(asset.ownerUserId===viewer.id?'personal':`user:${asset.ownerUserId}`)
   if(actualLibrary!==libraryId)throw new Error('Forbidden')
-  if(operation==='delivery'||input.need!=='delete'){
+  if(operation==='delivery'||operation==='preview'||input.need!=='delete'){
    if(asset.trashedAt||asset.expiresAt&&asset.expiresAt<=new Date())throw new Error('File unavailable')
-   await assertLibraryAccess(viewer,libraryId,operation==='delivery'?'read':input.need,asset.folder)
+   await assertLibraryAccess(viewer,libraryId,operation==='delivery'||operation==='preview'?'read':input.need,asset.folder)
   }
-  if(operation==='delivery')return deliverAsset(asset)
+  const deliveryRequest=input.range?new Request('https://internal.invalid',{headers:{Range:input.range}}):undefined
+  if(operation==='delivery')return deliverAsset(asset,undefined,deliveryRequest)
+  if(operation==='preview')return previewAsset(asset,deliveryRequest)
   return json({assetId:asset.id,name:asset.name,mimeType:asset.mimeType,folder:asset.folder,fileSize:asset.fileSize})
  }
  if(operation==='createFolder'){

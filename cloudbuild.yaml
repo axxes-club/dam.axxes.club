@@ -38,7 +38,7 @@
         "ci-check:$BUILD_ID",
         "sh",
         "-ec",
-        "rm -f .env .env.* && npm run test:office-domain && npm run test:storage && npm test && npm run test:quota-ui"
+        "rm -f .env .env.* && npm run test:office-domain && npm run test:storage && npm test && npm run test:quota-ui && TEST_DOCUMENT_CONVERSION=1 npx tsx --test src/lib/file-preview.test.ts"
       ]
     },
     {
