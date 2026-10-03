@@ -24,9 +24,10 @@ import { viewerForUser } from "@/lib/account-viewer";
 
 const f = createUploadthing();
 
-async function assertUploadOwner(libraryId: string, userId: string, folder: string | null) {
-  const viewer = await viewerForUser(userId);
-  await assertLibraryAccess(viewer, libraryId, "write", folder);
+type Database = typeof db;
+async function assertUploadOwner(libraryId: string, userId: string, folder: string | null, database:Database=db) {
+  const viewer = await viewerForUser(userId, database);
+  await assertLibraryAccess(viewer, libraryId, "write", folder, database);
 }
 function sessionLibrary(session: { tenantId: string | null; ownerUserId: string | null; createdById: string }) {
   return session.tenantId ?? (session.ownerUserId && session.ownerUserId !== session.createdById ? `user:${session.ownerUserId}` : "personal");
@@ -78,11 +79,12 @@ export const ourFileRouter = {
         .where(eq(uploadSessions.id, metadata.tokenId));
       if (!validSession || validSession.expiresAt <= new Date())
         throw new UploadThingError("Session expired");
-      await assertUploadOwner(metadata.tenantId, metadata.userId, metadata.folder);
+      await assertUploadOwner(metadata.tenantId, metadata.userId, metadata.folder, db as unknown as Database);
       await assertFolderActive(
         metadata.tenantId,
         metadata.userId,
         metadata.folder,
+        db as unknown as Database,
       );
       const [row] = await db
         .insert(assets)
@@ -141,11 +143,12 @@ export const ourFileRouter = {
     })
     .onUploadComplete(async ({ metadata, file, transaction }) => {
       const db = drizzle(transaction, { schema: receiptSchema });
-      await assertUploadOwner(metadata.tenantId, metadata.userId, metadata.folder);
+      await assertUploadOwner(metadata.tenantId, metadata.userId, metadata.folder, db as unknown as Database);
       await assertFolderActive(
         metadata.tenantId,
         metadata.userId,
         metadata.folder,
+        db as unknown as Database,
       );
       const [row] = await db
         .insert(assets)
