@@ -14,3 +14,7 @@ if(process.env.TEST_DOCUMENT_CONVERSION==='1')test('real OOXML document spreadsh
  for(const name of ['sample.docx','sample.xlsx','sample.pptx']){const bytes=await readFile(new URL('../../tests/fixtures/previews/'+name,import.meta.url));const pdf=await convertDocument(bytes,name).catch(error=>{throw Error(name+': '+error.message);});assert.equal(new TextDecoder().decode(pdf.subarray(0,5)),'%PDF-');assert.ok(pdf.length>1000,name);}
 });
 test('native Work files receive an authenticated preview instead of unsupported fallback',()=>assert.equal(previewKind({name:'Budget',mimeType:'application/vnd.axxes.office.sheet'}),'native'));
+test('converted PDFs use inline delivery without a sandbox that disables browser PDF viewers',async()=>{
+ const {pdfPreviewResponse}=await import('./file-preview');const response=pdfPreviewResponse(new TextEncoder().encode('%PDF-1.4\n'));
+ assert.equal(response.headers.get('Content-Type'),'application/pdf');assert.equal(response.headers.get('Content-Disposition'),'inline');assert.equal(response.headers.get('Cache-Control'),'private, no-store');assert.ok(!response.headers.get('Content-Security-Policy')?.includes('sandbox'));
+});

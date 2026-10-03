@@ -26,7 +26,7 @@ export async function convertDocument(bytes:Uint8Array,filename:string):Promise<
   await writeFile(input,bytes);
   await mkdir(join(dir,'profile'));
   await writeFile(join(dir,'profile','registrymodifications.xcu'),`<?xml version="1.0"?><oor:items xmlns:oor="http://openoffice.org/2001/registry"><item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="MacroSecurityLevel" oor:op="fuse"><value>3</value></prop></item><item oor:path="/org.openoffice.Office.Writer/Content/Update"><prop oor:name="Link" oor:op="fuse"><value>0</value></prop></item></oor:items>`);
-  const converted=await run('libreoffice',[`-env:UserInstallation=${pathToFileURL(join(dir,'profile')).href}`,'--headless','--nologo','--nodefault','--norestore','--convert-to','pdf','--outdir',dir,input],{timeout:45_000,maxBuffer:1024*1024,env:{PATH:process.env.PATH,LANG:'C.UTF-8',HOME:dir,TMPDIR:dir}});
+  const converted=await run('libreoffice',[`-env:UserInstallation=${pathToFileURL(join(dir,'profile')).href}`,'--headless','--nologo','--nodefault','--norestore','--convert-to','pdf','--outdir',dir,input],{timeout:45_000,maxBuffer:1024*1024,env:{NODE_ENV:'production',PATH:process.env.PATH,LANG:'C.UTF-8',HOME:dir,TMPDIR:dir}});
   const pdf=await readFile(join(dir,'source.pdf')).catch(()=>{throw Error('Document conversion failed: '+converted.stdout+' '+converted.stderr);});
   if(pdf.subarray(0,5).toString()!=='%PDF-')throw Error('Could not render this document');
   return pdf;
@@ -38,4 +38,8 @@ export async function readPreviewBytes(response:Response,limit=32*1024*1024):Pro
  const reader=response.body.getReader(),parts:Uint8Array[]=[];let size=0;
  try{while(true){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>limit)throw Error('File exceeds the preview limit');parts.push(value);}}finally{await reader.cancel();}
  const result=new Uint8Array(size);let offset=0;for(const part of parts){result.set(part,offset);offset+=part.length;}return result;
+}
+
+export function pdfPreviewResponse(bytes:Uint8Array):Response {
+ return new Response(Buffer.from(bytes),{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"frame-ancestors 'self'"}});
 }
