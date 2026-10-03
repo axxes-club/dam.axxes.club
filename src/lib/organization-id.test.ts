@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {organizationId} from './organization-id';
+test('personal and shared personal libraries never become organization analytics or branding requests',()=>{for(const id of ['personal','user:owner','', '-'.repeat(36)])assert.equal(organizationId(id),null);const id='00000000-0000-4000-8000-000000000001';assert.equal(organizationId(id),id)});
