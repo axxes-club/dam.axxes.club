@@ -4,7 +4,7 @@
 # Cloud Build from Secret Manager; it never reaches the final image.
 FROM node:24-slim AS build
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates libreoffice-writer libreoffice-calc libreoffice-impress fonts-dejavu fonts-liberation \
   && rm -rf /var/lib/apt/lists/*
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -16,7 +16,7 @@ RUN --mount=type=secret,id=build-env,target=/app/.env.production if [ -f package
 
 FROM node:24-slim
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates libreoffice-writer libreoffice-calc libreoffice-impress fonts-dejavu fonts-liberation \
   && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=8080
 COPY --from=build --chown=node:node /app/.next/standalone ./

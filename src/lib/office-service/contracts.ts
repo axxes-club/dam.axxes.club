@@ -1,4 +1,4 @@
-export const FOLDERS_OPERATIONS=['list','folders','libraries','authorize','createFolder','rename','move','trash','restore','renameFolder','trashFolder','restoreFolder','delivery','uploadStart','uploadFinish','linkOffice','linkedOffice'] as const
+export const FOLDERS_OPERATIONS=['list','folders','libraries','authorize','createFolder','rename','move','trash','restore','renameFolder','trashFolder','restoreFolder','delivery','preview','uploadStart','uploadFinish','linkOffice','linkedOffice'] as const
 export type FoldersOperation=typeof FOLDERS_OPERATIONS[number]
 export type FolderCapabilities={canRead:boolean;canWrite:boolean;canDelete:boolean}
 export type FolderAsset={id:string;name:string;folder:string|null;mimeType:string|null;fileSize:number|null;category:string|null;updatedAt:string;trashedAt:string|null;expiresAt:string|null;officeDocumentId:string|null;officeKind:'doc'|'sheet'|'slides'|null;capabilities:FolderCapabilities}

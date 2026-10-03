@@ -15,5 +15,5 @@ export async function GET(
   } catch {
     return new NextResponse(null, { status: 404 });
   }
-  return deliverAsset(row);
+  return deliverAsset(row, undefined, req);
 }

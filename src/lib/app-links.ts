@@ -30,7 +30,7 @@ const withTenant = (path: string, tenantId?: string | null) =>
 
 export const APP_LINK_TARGETS: Record<string, AppLinkTarget> = {
   office: {
-    name: "AXXES Office",
+    name: "AXXES.work",
     base: "https://axxes.work",
     url: (id, tenant) => withTenant(`https://axxes.work/d/${id}`, tenant),
     quickLook: (id, tenant) => withTenant(`https://axxes.work/quicklook/${id}`, tenant),
