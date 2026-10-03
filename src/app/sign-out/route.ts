@@ -14,7 +14,7 @@ import { publicOrigin } from "@/lib/public-origin"
 export async function GET(req: NextRequest) {
   const back = new URL("/", publicOrigin(req)).href
 
-  if (HANDSHAKE_URL) {
+  if (HANDSHAKE_URL && new URL(back).hostname.endsWith('.axxes.club')) {
     return NextResponse.redirect(`${HANDSHAKE_URL}/sign-out?redirect=${encodeURIComponent(back)}`)
   }
 

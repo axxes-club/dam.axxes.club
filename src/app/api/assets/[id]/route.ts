@@ -12,6 +12,18 @@ import { guard, jsonError, removeOrphanedUploads } from "@/lib/api";
 import { normalizeFolder, normalizeTags, toAsset } from "@/lib/assets";
 import { enqueueStorageCleanup } from "@/lib/storage-cleanup";
 import { libraryScope, assetVisibleCondition } from "@/lib/library";
+import { getViewer } from '@/lib/access';
+import { authorizeAsset } from '@/lib/library';
+
+// Native clients and deep links reload live ownership and permissions.
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const viewer = await getViewer(req.headers);
+  if (!viewer) return jsonError('Sign in to view this file', 401);
+  try {
+    const row = await authorizeAsset(viewer, params.id, req.nextUrl.searchParams.get('trash') === '1' ? 'delete' : 'read');
+    return NextResponse.json(toAsset(row), {headers: {'Cache-Control':'private, no-store'}});
+  } catch { return jsonError('File unavailable', 404); }
+}
 
 async function load(req: NextRequest, id: string, need: "write" | "delete") {
   const [row] = await db

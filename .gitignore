@@ -39,3 +39,5 @@ next-env.d.ts
 # one-off codemod scripts, already applied
 patch_*.js
 create_table.js
+
+.superpowers/
