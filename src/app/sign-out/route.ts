@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   }
 
   const result = await auth.api.signOut({ headers: req.headers, asResponse: true }).catch(() => null)
-  const res = NextResponse.redirect(new URL("/sign-in", publicOrigin(req)))
+  const res = NextResponse.redirect(new URL("/sign-in?signedOut=1", publicOrigin(req)))
   result?.headers.getSetCookie().forEach((cookie) => res.headers.append("set-cookie", cookie))
   return res
 }

@@ -1,8 +1,8 @@
+import {folderFilter} from "./folders-search";
 import { libraryScope, assetVisibleCondition, folderScope } from "./library";
 import {
   and,
   count,
-  eq,
   ilike,
   isNotNull,
   isNull,
@@ -25,7 +25,6 @@ import {
   toAsset,
 } from "./assets";
 import {
-  UNFILED,
   type AssetAppLink,
   type AssetPage,
   type AssetQuery,
@@ -34,7 +33,7 @@ import {
 
 export async function queryAssets(
   tenantId: string,
-  query: AssetQuery & { trash?: boolean; scopeFolder?: string | null },
+  query: AssetQuery & { trash?: boolean; scopeFolder?: string | null; recursive?:boolean },
   userId = "",
 ): Promise<AssetPage> {
   const conditions: SQL[] = [
@@ -57,8 +56,8 @@ export async function queryAssets(
   }
   if (query.type && ASSET_TYPES.includes(query.type))
     conditions.push(assetTypeCondition(query.type));
-  if (query.folder === UNFILED) conditions.push(isNull(assets.folder));
-  else if (query.folder) conditions.push(eq(assets.folder, query.folder));
+  const folderCondition=folderFilter(assets.folder,query.folder,query.recursive);
+  if(folderCondition)conditions.push(folderCondition);
 
   const offset = Math.max(0, Math.floor(query.offset ?? 0));
   const where = and(...conditions);

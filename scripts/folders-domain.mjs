@@ -30,6 +30,14 @@ async function main(){
  const body=writableMap(planned);body.fingerprint=current.fingerprint;
  const response=await fetch(`https://compute.googleapis.com/compute/v1/projects/${project}/global/urlMaps/${name}`,{method:'PUT',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
  const result=await response.json();if(!response.ok)throw Error(`Routing update rejected (${response.status}): ${result.error?.message??'Unknown error'}`);
- console.log(`Routing operation: ${result.name}`);
+ console.log(`Routing operation submitted: ${result.name}`);
+ const deadline=Date.now()+180_000;
+ while(Date.now()<deadline){
+  const poll=await fetch(`https://compute.googleapis.com/compute/v1/projects/${project}/global/operations/${result.name}`,{headers:{Authorization:`Bearer ${token}`}});
+  const operation=await poll.json();if(!poll.ok)throw Error(`Could not read routing operation (${poll.status})`);
+  if(operation.status==='DONE'){if(operation.error)throw Error(`Routing operation failed: ${operation.error.errors?.map(e=>e.message).join('; ')??'Unknown error'}`);console.log('Folders routing applied successfully.');return;}
+  await new Promise(resolve=>setTimeout(resolve,2000));
+ }
+ throw Error(`Routing operation still pending after 3 minutes: ${result.name}`);
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{console.error(error.message);process.exitCode=1;});

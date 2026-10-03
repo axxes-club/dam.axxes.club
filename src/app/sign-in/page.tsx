@@ -7,15 +7,15 @@ import { safeLocalPath } from '@/lib/folders-oidc';
 // Rendered per request so the Handshake redirect follows runtime config
 export const dynamic = "force-dynamic";
 
-export default function SignInPage({searchParams}:{searchParams:{next?:string;error?:string}}) {
+export default function SignInPage({searchParams}:{searchParams:{next?:string;error?:string;signedOut?:string}}) {
   if (HANDSHAKE_URL) {
-    if(process.env.AXXES_OIDC_CLIENT_SECRET&&!searchParams.error){
+    if(process.env.AXXES_OIDC_CLIENT_SECRET&&!searchParams.error&&!searchParams.signedOut){
       redirect(`/api/auth/axxes/start?next=${encodeURIComponent(safeLocalPath(searchParams.next))}`);
     }
     // During migration show the existing account form rather than a cross-domain cookie loop.
     const h = headers();
     const host = (h.get('x-forwarded-host')??h.get('host')??'').split(':')[0];
-    if(host==='folders.axxes.app')return <><SignInForm />{searchParams.error&&<p role="alert" className="fixed bottom-6 inset-x-6 text-center text-sm">AXXES sign-in could not finish. You can sign in with your existing account below.</p>}</>;
+    if(host==='folders.axxes.app')return <><SignInForm />{searchParams.signedOut&&<a className="fixed bottom-6 inset-x-6 text-center text-sm underline" href={`/api/auth/axxes/start?next=${encodeURIComponent(safeLocalPath(searchParams.next))}`}>Continue with AXXES</a>}{searchParams.error&&<p role="alert" className="fixed bottom-6 inset-x-6 text-center text-sm">AXXES sign-in could not finish. You can sign in with your existing account below.</p>}</>;
     const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
     redirect(`${HANDSHAKE_URL}/sign-in?redirect=${encodeURIComponent(`${origin}/`)}`);
   }
