@@ -8,3 +8,5 @@ export function assertCookieOrigin(request:Request):void;
 export function boundedJson(request:Request,limit?:number):Promise<unknown>;
 
 export function boundedText(request:Request,limit?:number):Promise<string>;
+
+export function admissionTransaction<T>(pool:{connect:()=>Promise<{query:(sql:string,values?:unknown[])=>Promise<{rows:any[]}>;release:(failed?:boolean)=>void}>},operation:(db:{query:(sql:string,values:unknown[])=>Promise<{rows:any[]}>})=>Promise<T>):Promise<T>;

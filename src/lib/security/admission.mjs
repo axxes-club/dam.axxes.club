@@ -38,3 +38,12 @@ export async function boundedText(request,limit=16384){
 }
 export async function boundedJson(request,limit=16384){const raw=await boundedText(request,limit);try{return JSON.parse(raw);}catch{return null;}}
 export function wrapAdmission(handler,admission){return async(request,...args)=>{try{assertCookieOrigin(request);await admission(request);}catch(error){return admissionResponse(error);}return handler(request,...args);};}
+
+/** One dedicated client and fixed global-first lock order; denied work commits no buckets. */
+export async function admissionTransaction(pool,operation){
+ let client;try{client=await pool.connect();}catch{throw new AdmissionError(503)}
+ let failed=false;
+ try{await client.query('BEGIN');const value=await operation(client);await client.query('COMMIT');return value;}
+ catch(error){try{await client.query('ROLLBACK');}catch{failed=true;}throw error instanceof AdmissionError?error:new AdmissionError(503);}
+ finally{client.release(failed);}
+}
