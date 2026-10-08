@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { libraryOwnership, ensureFolder, assertFolderActive } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
@@ -7,7 +8,7 @@ import { assetTypeOf, normalizeFolder, toAsset } from "@/lib/assets";
 import { queryAssets } from "@/lib/queries";
 import type { AssetSort, AssetType } from "@/lib/types";
 
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   const access = await guard(req.headers, params.get("tenantId"), "read", params.get("folder"));
   if ("error" in access) return access.error;
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
 }
 
 // Add a file by URL; the file stays where it is hosted
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const access = await guard(req.headers, body?.tenantId, "write", normalizeFolder(body?.folder));
   if ("error" in access) return access.error;
@@ -77,3 +78,7 @@ function guessMime(pathname: string): string | null {
   };
   return ext ? map[ext] ?? null : null;
 }
+
+export const GET=wrapAdmission(GETHandler,'src/app/api/assets/route.ts'+':GET',12000);
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/assets/route.ts'+':POST',3000);

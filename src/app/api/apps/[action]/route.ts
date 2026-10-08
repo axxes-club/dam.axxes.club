@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { NextRequest, NextResponse } from "next/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -20,13 +21,13 @@ async function grant(appKey: string, assetId: string, recordId: string, audience
   // Legacy app links are one-per-app; grants retain every individual usage.
   await db.insert(assetAppLinks).values({ assetId, appKey, recordId, tenantId: audienceTenantId }).onConflictDoNothing();
 }
-export async function POST(req: NextRequest, { params }: { params: { action: string } }) {
+async function POSTHandler(req: NextRequest, { params }: { params: Promise<{ action: string }> }) {
   try {
     const body = await req.json().catch(() => null);
     const registeredKey = typeof body?.appKey === "string" ? body.appKey : "";
     const app = Object.hasOwn(ASSET_APPS, registeredKey) ? ASSET_APPS[registeredKey] : null;
     const p = app && typeof body?.token === "string" ? verifyEnvelope(body.token, process.env.BETTER_AUTH_SECRET || "", registeredKey) : null;
-    const action = params.action;
+    const action = (await params).action;
     if (!app || !p || p.action !== action) return NextResponse.json({ error: "Invalid app authorization" }, { status: 401 });
 
     const appKey = p.appKey;
@@ -124,3 +125,5 @@ export async function POST(req: NextRequest, { params }: { params: { action: str
     return NextResponse.json({ error: error instanceof Error ? error.message : "Folders unavailable" }, { status: 400 });
   }
 }
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/apps/[action]/route.ts'+':POST',3000);

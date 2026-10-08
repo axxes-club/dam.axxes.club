@@ -11,7 +11,8 @@
     "test:storage": "node --test scripts/gcs/*.check.mjs",
     "test:office-domain": "tsx --test tests/office-links-domain.test.ts",
     "test:quota": "node --test scripts/gcs/*.check.mjs",
-    "test:quota-ui": "node --test scripts/storage/*.check.mjs"
+    "test:quota-ui": "node --test scripts/storage/*.check.mjs",
+    "test:security": "node --import tsx --test tests/security-signup.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

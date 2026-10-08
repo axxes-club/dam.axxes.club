@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function MobileCapturePage({
   params
 }: {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }) {
-  const { token } = params;
+  const { token } = await params;
 
   const [handoff] = await db.select().from(uploadSessions).where(eq(uploadSessions.token, token));
 

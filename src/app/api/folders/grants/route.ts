@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { NextResponse, type NextRequest } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -5,7 +6,7 @@ import { folderGrants, assetFolders } from "@/lib/db/schema";
 import { guard, jsonError } from "@/lib/api";
 import { folderScope, ensureFolder } from "@/lib/library";
 import { normalizeFolder } from "@/lib/assets";
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   const a = await guard(
     req.headers,
     req.nextUrl.searchParams.get("tenantId"),
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     .where(folderScope(a.tenant.id, a.viewer.id));
   return NextResponse.json({ grants: rows });
 }
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const b = await req.json().catch(() => null);
   const a = await guard(req.headers, b?.tenantId, "delete");
   if ("error" in a) return a.error;
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
     .returning();
   return NextResponse.json(grant, { status: 201 });
 }
-export async function DELETE(req: NextRequest) {
+async function DELETEHandler(req: NextRequest) {
   const b = await req.json().catch(() => null);
   const a = await guard(req.headers, b?.tenantId, "delete");
   if ("error" in a) return a.error;
@@ -65,3 +66,9 @@ export async function DELETE(req: NextRequest) {
   await db.delete(folderGrants).where(eq(folderGrants.id, row.id));
   return NextResponse.json({ ok: true });
 }
+
+export const GET=wrapAdmission(GETHandler,'src/app/api/folders/grants/route.ts'+':GET',12000);
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/folders/grants/route.ts'+':POST',3000);
+
+export const DELETE=wrapAdmission(DELETEHandler,'src/app/api/folders/grants/route.ts'+':DELETE',3000);

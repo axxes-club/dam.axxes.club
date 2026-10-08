@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { libraryScope, assetVisibleCondition } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { sql } from "drizzle-orm";
@@ -5,7 +6,7 @@ import { db } from "@/lib/db";
 import { assets } from "@/lib/db/schema";
 import { guard } from "@/lib/api";
 
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   const folder = req.nextUrl.searchParams.get("folder");
   const access = await guard(req.headers, req.nextUrl.searchParams.get("tenantId"), "read", folder);
   if ("error" in access) return access.error;
@@ -20,3 +21,5 @@ export async function GET(req: NextRequest) {
   `);
   return NextResponse.json({ tags: rows.rows.map((r) => r.tag) });
 }
+
+export const GET=wrapAdmission(GETHandler,'src/app/api/tags/route.ts'+':GET',12000);

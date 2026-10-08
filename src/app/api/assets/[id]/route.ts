@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import {updateAssetMetadataStatement,deleteAssetStatement} from "@/lib/office-service/metadata";
 import {
   assertFolderActive,
@@ -16,11 +17,11 @@ import { getViewer } from '@/lib/access';
 import { authorizeAsset } from '@/lib/library';
 
 // Native clients and deep links reload live ownership and permissions.
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+async function GETHandler(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const viewer = await getViewer(req.headers);
   if (!viewer) return jsonError('Sign in to view this file', 401);
   try {
-    const row = await authorizeAsset(viewer, params.id, req.nextUrl.searchParams.get('trash') === '1' ? 'delete' : 'read');
+    const row = await authorizeAsset(viewer, (await params).id, req.nextUrl.searchParams.get('trash') === '1' ? 'delete' : 'read');
     return NextResponse.json(toAsset(row), {headers: {'Cache-Control':'private, no-store'}});
   } catch { return jsonError('File unavailable', 404); }
 }
@@ -39,11 +40,11 @@ async function load(req: NextRequest, id: string, need: "write" | "delete") {
   return { row, ...access };
 }
 
-export async function PATCH(
+async function PATCHHandler(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const result = await load(req, params.id, "write");
+  const result = await load(req, (await params).id, "write");
   if ("error" in result) return result.error;
 
   const body = await req.json().catch(() => null);
@@ -103,32 +104,38 @@ export async function PATCH(
     updates.trashedAt = null;
     updates.trashReason = null;
   }
-  const changed=await db.execute(updateAssetMetadataStatement(and(eq(assets.id,params.id),libraryScope(libraryId,result.viewer.id))!,{...updates,updatedAt:new Date()}));
+  const changed=await db.execute(updateAssetMetadataStatement(and(eq(assets.id,(await params).id),libraryScope(libraryId,result.viewer.id))!,{...updates,updatedAt:new Date()}));
   if(!changed.rows.length)return jsonError("Ownership changed; refresh and retry",409);
-  const [row]=await db.select().from(assets).where(and(eq(assets.id,params.id),libraryScope(libraryId,result.viewer.id)));
+  const [row]=await db.select().from(assets).where(and(eq(assets.id,(await params).id),libraryScope(libraryId,result.viewer.id)));
   if(!row)return jsonError("Ownership changed; refresh and retry",409);
   return NextResponse.json(toAsset(row));
 }
 
-export async function DELETE(
+async function DELETEHandler(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const result = await load(req, params.id, "delete");
+  const result = await load(req, (await params).id, "delete");
   if ("error" in result) return result.error;
 
   if (req.nextUrl.searchParams.get("permanent") !== "1") {
-    await db.execute(updateAssetMetadataStatement(and(eq(assets.id,params.id),libraryScope(result.row.tenantId??'personal',result.viewer.id))!,{trashedAt:new Date(),trashReason:'deleted',updatedAt:new Date()}));
+    await db.execute(updateAssetMetadataStatement(and(eq(assets.id,(await params).id),libraryScope(result.row.tenantId??'personal',result.viewer.id))!,{trashedAt:new Date(),trashReason:'deleted',updatedAt:new Date()}));
     return NextResponse.json({ ok: true });
   }
   if (!result.row.trashedAt) {
-    const [active] = await db.select({ id: assets.id }).from(assets).where(and(eq(assets.id, params.id), assetVisibleCondition()));
+    const [active] = await db.select({ id: assets.id }).from(assets).where(and(eq(assets.id, (await params).id), assetVisibleCondition()));
     if (active) return jsonError("Move the file to Trash first", 409);
   }
   if (result.row.source === "upload" && result.row.storageKey) await enqueueStorageCleanup([result.row.storageKey]);
-  const deletion=await db.execute(deleteAssetStatement(and(eq(assets.id,params.id),libraryScope(result.row.tenantId??'personal',result.viewer.id),sql`(${assets.trashedAt} is not null or not (${assetVisibleCondition()}))`)!));
+  const deletion=await db.execute(deleteAssetStatement(and(eq(assets.id,(await params).id),libraryScope(result.row.tenantId??'personal',result.viewer.id),sql`(${assets.trashedAt} is not null or not (${assetVisibleCondition()}))`)!));
   const deleted=deletion.rows as {url:string;source:string}[];
   await removeOrphanedUploads(deleted);
   if (!deleted.length) return jsonError("File state changed; refresh and retry", 409);
   return NextResponse.json({ ok: true });
 }
+
+export const GET=wrapAdmission(GETHandler,'src/app/api/assets/[id]/route.ts'+':GET',12000);
+
+export const PATCH=wrapAdmission(PATCHHandler,'src/app/api/assets/[id]/route.ts'+':PATCH',3000);
+
+export const DELETE=wrapAdmission(DELETEHandler,'src/app/api/assets/[id]/route.ts'+':DELETE',3000);

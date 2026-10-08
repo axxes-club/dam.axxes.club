@@ -1,7 +1,8 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { getViewer, tenantAccess } from "@/lib/access";
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const viewer = await getViewer(await headers());
   if (!viewer) return NextResponse.json({}, { status: 401 });
   let body: unknown;
@@ -13,3 +14,5 @@ export async function POST(request: Request) {
   response.cookies.set("folders_tenant_id", id, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 31536000 });
   return response;
 }
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/organization/select/route.ts'+':POST',3000);
