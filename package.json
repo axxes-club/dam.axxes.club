@@ -21,7 +21,7 @@
     "@types/qrcode": "^1.5.6",
     "@uploadthing/react": "^7.3.3",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.4.19",
+    "better-auth": "1.6.33",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "date-fns": "^4.4.0",
@@ -29,7 +29,7 @@
     "framer-motion": "^13.4.4",
     "jose": "^6.2.12",
     "lucide-react": "^1.48.0",
-    "next": "14.2.35",
+    "next": "15.5.27",
     "openid-client": "^6.8.8",
     "pg": "8.23.1",
     "qrcode": "^1.5.4",
@@ -48,10 +48,14 @@
     "@types/react-dom": "^18",
     "drizzle-kit": "^0.31.11",
     "eslint": "^8",
-    "eslint-config-next": "14.2.35",
+    "eslint-config-next": "15.5.27",
     "postcss": "^8",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "overrides": {
+    "uuid": "11.1.1",
+    "effect": "^3.20.0"
   }
 }
