@@ -18,8 +18,9 @@ export const metadata: Metadata = { title: "Shared with you", robots: { index: f
 
 const FOLDER_LIMIT = 500;
 
-export default async function SharePage({ params }: { params: { token: string } }) {
-  const payload = verifyShareToken(params.token);
+export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
+  const {token}=await params;
+  const payload = verifyShareToken(token);
   if (!payload) return <Unavailable />;
 
   const tenant=payload.t==="personal"?{name:"Personal library"}:(await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, payload.t)))[0];
@@ -28,7 +29,7 @@ export default async function SharePage({ params }: { params: { token: string } 
   let items: Asset[];
   if (payload.k === "asset") {
     const rows = await db.select().from(assets).where(and(eq(assets.id, payload.id), libraryScope(payload.t,payload.u??""),assetVisibleCondition()));
-    items = rows.map((row) => ({...toAsset(row),url:`/api/share/${params.token}/assets/${row.id}`,thumbnailUrl:null}));
+    items = rows.map((row) => ({...toAsset(row),url:`/api/share/${token}/assets/${row.id}`,thumbnailUrl:null}));
     if (!items.length) return <Unavailable />;
   } else {
     const rows = await db
@@ -37,10 +38,10 @@ export default async function SharePage({ params }: { params: { token: string } 
       .where(and(libraryScope(payload.t,payload.u??""),assetVisibleCondition(), eq(assets.folder, payload.f)))
       .orderBy(asc(assets.name))
       .limit(FOLDER_LIMIT);
-    items = rows.map((row) => ({...toAsset(row),url:`/api/share/${params.token}/assets/${row.id}`,thumbnailUrl:null}));
+    items = rows.map((row) => ({...toAsset(row),url:`/api/share/${token}/assets/${row.id}`,thumbnailUrl:null}));
   }
 
-  items = items.map(asset => ({ ...asset, url: sharedAssetUrl(asset.url, params.token)!, thumbnailUrl: sharedAssetUrl(asset.thumbnailUrl, params.token) }));
+  items = items.map(asset => ({ ...asset, url: sharedAssetUrl(asset.url, token)!, thumbnailUrl: sharedAssetUrl(asset.thumbnailUrl, token) }));
 
   return (
     <div className="min-h-dvh bg-sidebar">

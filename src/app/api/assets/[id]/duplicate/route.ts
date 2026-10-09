@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { assertFolderActive } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
@@ -6,8 +7,8 @@ import { assets } from "@/lib/db/schema";
 import { guard, jsonError } from "@/lib/api";
 import { toAsset } from "@/lib/assets";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const [original] = await db.select().from(assets).where(eq(assets.id, params.id)).catch(() => []);
+async function POSTHandler(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const [original] = await db.select().from(assets).where(eq(assets.id, (await params).id)).catch(() => []);
   if (!original) return jsonError("Not found", 404);
   const access = await guard(req.headers, original.tenantId ?? "personal", "write");
   if ("error" in access) return access.error;
@@ -27,3 +28,5 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .returning();
   return NextResponse.json(toAsset(row), { status: 201 });
 }
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/assets/[id]/duplicate/route.ts'+':POST',3000);

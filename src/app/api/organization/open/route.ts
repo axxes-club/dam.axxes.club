@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { NextRequest, NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { and, eq, isNull } from "drizzle-orm"
@@ -5,7 +6,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { tenants, tenantMemberships } from "@/lib/db/schema"
 import { publicOrigin } from "@/lib/public-origin"
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const id = request.nextUrl.searchParams.get("tenant")
   if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return NextResponse.json({ error: "Invalid organization" }, { status: 400 })
   const session = await auth.api.getSession({ headers: await headers() })
@@ -18,3 +19,5 @@ export async function GET(request: NextRequest) {
   response.cookies.set("folders_tenant_id", id, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 31536000 })
   return response
 }
+
+export const GET=wrapAdmission(GETHandler,'src/app/api/organization/open/route.ts'+':GET',12000);

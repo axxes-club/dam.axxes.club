@@ -1,7 +1,8 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/access";
 import { sharedFolderDestinations } from "@/lib/library";
-export async function GET(req: Request) {
+async function GETHandler(req: Request) {
   const viewer = await getViewer(req.headers);
   if (!viewer) return NextResponse.json({ error: "Sign in to view your libraries" }, { status: 401 });
   const shared = await sharedFolderDestinations(viewer);
@@ -9,3 +10,5 @@ export async function GET(req: Request) {
     id: s.libraryId, folder: s.folder, name: `Shared: ${s.folder}`, role: "shared", canWrite: s.canWrite, canDelete: false,
   }))] }, { headers: { "Cache-Control": "private, no-store" } });
 }
+
+export const GET=wrapAdmission(GETHandler,'src/app/api/libraries/route.ts'+':GET',12000);

@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { libraryOwnership,assertFolderActive,ensureFolder,assertLibraryAccess } from "@/lib/library";
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
@@ -8,8 +9,8 @@ import { baseUrlFrom, createToken, expiryFromNow, qrSvg } from "@/lib/upload-ses
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
-  const viewer = await getViewer(headers());
+async function POSTHandler(req: Request) {
+  const viewer = await getViewer(await headers());
   if (!viewer) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
@@ -42,3 +43,5 @@ export async function POST(req: Request) {
     qr: await qrSvg(url)
   });
 }
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/upload-sessions/route.ts'+':POST',3000);

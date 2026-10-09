@@ -1,3 +1,5 @@
+import {AdmissionError} from "@/lib/security/admission.mjs";
+import {admitAction} from "@/lib/security/admission-server";
 import { NextResponse } from "next/server";
 import { inArray } from "drizzle-orm";
 import { keyForUrl } from "@/lib/gcs/server";
@@ -38,6 +40,7 @@ export async function guard(
       error: jsonError("You can't delete files in this workspace", 403),
     };
 
+  try{await admitAction(viewer.id,tenant.id);}catch(error){if(error instanceof AdmissionError)return {error:jsonError(error.message,error.status)};throw error;}
   return { viewer, tenant };
 }
 

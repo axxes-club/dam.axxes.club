@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import {mutateFolder} from "@/lib/office-service/mutations";
 import {
   renameFolderStatement,
@@ -13,7 +14,7 @@ import { normalizeFolder } from "@/lib/assets";
 import { folderScope, ensureFolder } from "@/lib/library";
 import { queryOverview } from "@/lib/queries";
 import { restoreDeadline } from "@/lib/asset-policy";
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   const scopeFolder = req.nextUrl.searchParams.get("folder");
   const a = await guard(
     req.headers,
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
     );
   return NextResponse.json({ ...overview, folderPolicies: folders });
 }
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const b = await req.json().catch(() => null);
   const a = await guard(req.headers, b?.tenantId, "write");
   if ("error" in a) return a.error;
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json(row, { status: 201 });
 }
-export async function PATCH(req: NextRequest) {
+async function PATCHHandler(req: NextRequest) {
   const b = await req.json().catch(() => null);
   const a = await guard(req.headers, b?.tenantId, "delete");
   if ("error" in a) return a.error;
@@ -145,7 +146,7 @@ export async function PATCH(req: NextRequest) {
     .where(eq(assetFolders.id, row.id));
   return NextResponse.json(updated);
 }
-export async function DELETE(req: NextRequest) {
+async function DELETEHandler(req: NextRequest) {
   const b = await req.json().catch(() => null);
   const a = await guard(req.headers, b?.tenantId, "delete");
   if ("error" in a) return a.error;
@@ -155,3 +156,11 @@ export async function DELETE(req: NextRequest) {
   try{const result=await mutateFolder(a.viewer,a.tenant.id,'trashFolder',{path});return NextResponse.json(result)}
   catch{return jsonError('Folder unavailable',409)}
 }
+
+export const GET=wrapAdmission(GETHandler,'src/app/api/folders/route.ts'+':GET',12000);
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/folders/route.ts'+':POST',3000);
+
+export const PATCH=wrapAdmission(PATCHHandler,'src/app/api/folders/route.ts'+':PATCH',3000);
+
+export const DELETE=wrapAdmission(DELETEHandler,'src/app/api/folders/route.ts'+':DELETE',3000);

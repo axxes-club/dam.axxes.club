@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import {updateAssetMetadataStatement} from "@/lib/office-service/metadata";
 import { libraryScope, assetVisibleCondition, assertFolderActive, ensureFolder } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
@@ -8,7 +9,7 @@ import { cleanIds, guard, jsonError } from "@/lib/api";
 import { normalizeFolder, normalizeTags } from "@/lib/assets";
 
 // { tenantId, action: "move" | "tag" | "delete", ids, folder?, tags? }
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const action = body?.action;
   if (!["move", "tag", "delete"].includes(action)) return jsonError("Unknown action", 400);
@@ -45,3 +46,5 @@ export async function POST(req: NextRequest) {
   const deleted=await db.execute(updateAssetMetadataStatement(scope!,{trashedAt:new Date(),trashReason:'deleted',updatedAt:new Date()}));
   return NextResponse.json({ count: deleted.rows.length });
 }
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/assets/bulk/route.ts'+':POST',3000);

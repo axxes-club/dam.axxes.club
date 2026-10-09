@@ -1,3 +1,4 @@
+import {assertActiveAccount} from '@/lib/security/admission-server';
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "./db";
 import { tenantMemberships, tenants, user } from "./db/schema";
@@ -23,6 +24,7 @@ export async function getViewer(headers: Headers): Promise<Viewer | null> {
 
 /** Internal services call this only after authenticating their signed request. */
 export async function getViewerById(userId: string): Promise<Viewer | null> {
+  await assertActiveAccount(userId);
   const [row] = await db
     .select({ id:user.id,name:user.name,email:user.email,isSuperadmin: user.isSuperadmin, image: user.image })
     .from(user)

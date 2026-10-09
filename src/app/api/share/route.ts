@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { libraryScope, assetVisibleCondition, assertFolderActive } from "@/lib/library";
 import { NextResponse, type NextRequest } from "next/server";
 import { and, eq } from "drizzle-orm";
@@ -11,7 +12,7 @@ import { publicOrigin } from "@/lib/public-origin"
 const DAYS = new Set([1, 7, 30, 365]);
 
 // { tenantId, target: { kind: "asset", id } | { kind: "folder", folder }, days }
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const access = await guard(req.headers, body?.tenantId, "write");
   if ("error" in access) return access.error;
@@ -41,3 +42,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ url: `${publicOrigin(req)}/share/${token}`, expiresAt: new Date(exp).toISOString() });
 }
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/share/route.ts'+':POST',3000);

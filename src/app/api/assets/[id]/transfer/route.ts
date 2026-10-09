@@ -1,3 +1,4 @@
+import {wrapAdmission} from '@/lib/security/admission-server';
 import { NextResponse, type NextRequest } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -10,16 +11,16 @@ import {
   libraryOwnership,
 } from "@/lib/library";
 import { normalizeFolder, toAsset } from "@/lib/assets";
-export async function POST(
+async function POSTHandler(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const b = await req.json().catch(() => null);
   const destination = await guard(req.headers, b?.tenantId, "delete");
   if ("error" in destination) return destination.error;
   let original;
   try {
-    original = await authorizeAsset(destination.viewer, params.id, "delete");
+    original = await authorizeAsset(destination.viewer, (await params).id, "delete");
   } catch {
     return jsonError("Forbidden", 403);
   }
@@ -61,3 +62,5 @@ export async function POST(
     .where(eq(assets.id, original.id));
   return NextResponse.json(toAsset(row));
 }
+
+export const POST=wrapAdmission(POSTHandler,'src/app/api/assets/[id]/transfer/route.ts'+':POST',3000);
